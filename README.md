@@ -57,19 +57,19 @@ You need:
 
 ### Linux AppImage (recommended)
 
-1. Download **`LikeTheWind-1.1-x86_64.AppImage`**.
-2. Make it executable and run it:
+1. Download **`LikeTheWind-1.1-linux-x86_64.tar.gz`** and extract it.
+2. Put **`pdrift.zip`** in the extracted **`roms`** folder.
+3. Make the AppImage executable and run it:
 
 ```bash
-chmod +x LikeTheWind-1.1-x86_64.AppImage
-./LikeTheWind-1.1-x86_64.AppImage
+cd LikeTheWind-1.1-linux-x86_64
+chmod +x LikeTheWind.AppImage
+./LikeTheWind.AppImage
 ```
 
-3. Put **`pdrift.zip`** in the **`roms`** folder created beside the AppImage.
-
-The AppImage includes SDL2 and the Linux audio runtime libraries. If the
-AppImage is in a read-only location, its data goes to
-`~/.local/share/likethewind` instead.
+The tar contains the AppImage, a ROM folder, and a short README. The AppImage
+includes SDL2 and the Linux audio runtime libraries. If it is moved to a
+read-only location, its data goes to `~/.local/share/likethewind` instead.
 
 ### Windows zip
 

@@ -332,10 +332,10 @@ Windows:
     Run LikeTheWind.exe.
 
 Linux x86_64:
-    Download the AppImage from the release page:
-        chmod +x LikeTheWind-1.1-x86_64.AppImage
-        ./LikeTheWind-1.1-x86_64.AppImage
-    Put pdrift.zip in the roms folder created beside the AppImage.
+    Download LikeTheWind-1.1-linux-x86_64.tar.gz from the release page,
+    extract it, and put pdrift.zip in the roms folder:
+        chmod +x LikeTheWind.AppImage
+        ./LikeTheWind.AppImage
 
 The game checks each required ROM file by size, CRC-32 and SHA-1 and prepares
 the ROM automatically on first launch. Other revisions are rejected.
