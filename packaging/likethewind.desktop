@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=LikeTheWind
+GenericName=Power Drift
+Comment=Native PC recompilation of Power Drift (1988)
+Exec=LikeTheWind-linux
+Icon=likethewind
+Terminal=false
+Categories=Game;ArcadeGame;

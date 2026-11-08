@@ -1,6 +1,6 @@
 # LikeTheWind
 
-**Version 1.0**
+**Version 1.1**
 
 [**Download the latest version here**](https://github.com/hojoworks/likethewind/releases/latest)
 
@@ -55,21 +55,30 @@ You need:
 - X11 or Wayland on Linux
 - Your own MAME **`pdrift.zip`** World, Rev A
 
-1. Unzip the LikeTheWind release.
-2. Put **`pdrift.zip`** in the **`roms`** folder beside the executable.
-3. Start it:
+### Linux AppImage (recommended)
 
-```text
-Windows:  LikeTheWind.exe
-Linux:    chmod +x LikeTheWind-linux
-          ./LikeTheWind-linux
+1. Download **`LikeTheWind-1.1-x86_64.AppImage`**.
+2. Make it executable and run it:
+
+```bash
+chmod +x LikeTheWind-1.1-x86_64.AppImage
+./LikeTheWind-1.1-x86_64.AppImage
 ```
+
+3. Put **`pdrift.zip`** in the **`roms`** folder created beside the AppImage.
+
+The AppImage includes SDL2 and the Linux audio runtime libraries. If the
+AppImage is in a read-only location, its data goes to
+`~/.local/share/likethewind` instead.
+
+### Windows zip
+
+1. Unzip the LikeTheWind release.
+2. Put **`pdrift.zip`** in the **`roms`** folder beside `LikeTheWind.exe`.
+3. Run `LikeTheWind.exe`.
 
 The first launch verifies the ROM and creates `roms\.prepared\`; later launches
 reuse that cache. The release is portable and needs no installer.
-
-On Linux, keep `libSDL2-2.0.so.0` beside `LikeTheWind-linux`. This is a normal
-x86_64 ELF, not an AppImage or Flatpak.
 
 ## Default controls
 

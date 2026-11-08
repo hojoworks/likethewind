@@ -308,8 +308,6 @@ if ($Package) {
     Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force -Path $Stage, (Join-Path $Stage 'roms') | Out-Null
     Copy-Item $ReleaseExe (Join-Path $Stage 'LikeTheWind.exe') -Force
-    Copy-Item $LinuxExe (Join-Path $Stage 'LikeTheWind-linux') -Force
-    Copy-Item (Join-Path $Build 'libSDL2-2.0.so.0') $Stage -Force
     Copy-Item (Join-Path $Build 'SDL2.dll') $Stage -Force
     Copy-Item (Join-Path $Root 'LICENSE') $Stage -Force
     Copy-Item (Join-Path $Root 'THIRD_PARTY_NOTICES.md') $Stage -Force
@@ -326,7 +324,7 @@ if ($Package) {
     Copy-Item (Join-Path $Root 'vendor\z80\LICENSE') (Join-Path $Licenses 'z80.txt') -Force
     Copy-Item (Join-Path $SdlRoot 'LICENSE.txt') (Join-Path $Licenses 'SDL2.txt') -Force -ErrorAction SilentlyContinue
     $ReleaseReadme = @"
-LikeTheWind 1.0 - Power Drift
+LikeTheWind 1.1 - Power Drift
 =============================
 
 Windows:
@@ -334,10 +332,10 @@ Windows:
     Run LikeTheWind.exe.
 
 Linux x86_64:
-    Put your MAME pdrift.zip (World, Rev A) in the roms folder.
-    Keep libSDL2-2.0.so.0 beside LikeTheWind-linux.
-    chmod +x LikeTheWind-linux
-    Run ./LikeTheWind-linux
+    Download the AppImage from the release page:
+        chmod +x LikeTheWind-1.1-x86_64.AppImage
+        ./LikeTheWind-1.1-x86_64.AppImage
+    Put pdrift.zip in the roms folder created beside the AppImage.
 
 The game checks each required ROM file by size, CRC-32 and SHA-1 and prepares
 the ROM automatically on first launch. Other revisions are rejected.
@@ -371,9 +369,8 @@ RUN IN BACKGROUND option. Settings are saved in likethewind-settings.cfg next
 to the executable. If the game crashes, crash.log is written next to it.
 Third-party licences are in the licenses folder and THIRD_PARTY_NOTICES.md.
 
-The Linux executable targets glibc 2.34+ and uses the included
-libSDL2-2.0.so.0. It needs an x86_64 Linux desktop with X11 or Wayland and an
-audio device. The Windows executable uses the included SDL2.dll.
+The Windows executable uses the included SDL2.dll. Linux is distributed as an
+AppImage and bundles its SDL2/ALSA/PulseAudio runtime.
 "@
     $RomsReadme = @"
 Put your MAME pdrift.zip (World, Rev A) in this folder, then run

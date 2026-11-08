@@ -15,6 +15,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -420,7 +421,12 @@ std::string executable_directory() {
 RomPrepareResult prepare_release_roms(const std::string &exe_dir) {
     RomPrepareResult result;
     std::error_code ec;
-    const fs::path roms = fs::path(exe_dir) / "roms";
+    // AppImages run from a read-only mount; their launcher points this at a
+    // writable data directory beside the AppImage or under XDG_DATA_HOME.
+    std::string base_dir = exe_dir;
+    if (const char *data_dir = std::getenv("LIKETHEWIND_DATA_DIR"))
+        if (*data_dir) base_dir = data_dir;
+    const fs::path roms = fs::path(base_dir) / "roms";
     fs::create_directories(roms, ec);
     if (ec) {
         result.error = "could not create " + roms.string();

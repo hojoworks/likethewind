@@ -1,0 +1,41 @@
+#!/bin/sh
+set -e
+
+HERE=${APPDIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}
+
+DATA_DIR=${LIKETHEWIND_DATA_DIR:-}
+if [ -z "$DATA_DIR" ] && [ -n "${APPIMAGE:-}" ]; then
+    APPIMAGE_DIR=$(CDPATH= cd -- "$(dirname -- "$APPIMAGE")" && pwd)
+    if [ -w "$APPIMAGE_DIR" ]; then
+        DATA_DIR=$APPIMAGE_DIR
+    fi
+fi
+if [ -z "$DATA_DIR" ]; then
+    DATA_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/likethewind
+fi
+mkdir -p "$DATA_DIR"
+
+# Samples and mix presets are read relative to the working directory. Keep a
+# writable copy beside the user's ROM/settings instead of inside the AppImage.
+for item in samples mixes; do
+    if [ -d "$HERE/usr/share/likethewind/$item" ]; then
+        mkdir -p "$DATA_DIR/$item"
+        cp -R "$HERE/usr/share/likethewind/$item/." "$DATA_DIR/$item/" 2>/dev/null || true
+    fi
+done
+if [ -f "$HERE/usr/share/likethewind/gamecontrollerdb.txt" ]; then
+    cp "$HERE/usr/share/likethewind/gamecontrollerdb.txt" "$DATA_DIR/" 2>/dev/null || true
+fi
+
+export LIKETHEWIND_DATA_DIR="$DATA_DIR"
+export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+if [ -f "$HERE/usr/share/alsa/alsa.conf" ]; then
+    export ALSA_CONFIG_DIR="$HERE/usr/share/alsa"
+    export ALSA_CONFIG_PATH="$HERE/usr/share/alsa/alsa.conf"
+fi
+if [ -d "$HERE/usr/lib/alsa-lib" ]; then
+    export ALSA_PLUGIN_DIR="$HERE/usr/lib/alsa-lib"
+fi
+
+cd "$DATA_DIR"
+exec "$HERE/usr/bin/LikeTheWind-linux" "$@"

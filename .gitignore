@@ -23,6 +23,7 @@ vendor/zig/
 vendor/SDL2/
 vendor/SDL2-linux/
 vendor/SDL2-linux-gnu/
+vendor/appimage/
 *.apk
 *.deb
 *.tar

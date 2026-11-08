@@ -77,6 +77,16 @@ release can verify and unpack the user's `pdrift.zip` without Python.
 The host window/input layer. SDL2 is downloaded into `vendor/` at build time
 and is not committed.
 
+## ALSA library / PulseAudio client
+
+- <https://www.alsa-project.org/>
+- <https://www.freedesktop.org/wiki/Software/PulseAudio/>
+- LGPL-2.1-or-later
+
+The Linux AppImage bundles the unmodified ALSA and PulseAudio runtime libraries
+so SDL2 can start on desktops without those development packages. The LGPL-2.1
+text is included as `licenses/lgpl-2.1.txt`.
+
 ## Zig
 
 - <https://ziglang.org/>
