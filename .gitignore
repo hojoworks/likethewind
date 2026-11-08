@@ -1,0 +1,104 @@
+# Game data and everything derived from it. Never commit these.
+roms/
+/pdrift/
+/pdrifta/
+mame/
+saturnrom/
+work/
+nvram/
+snap/
+generated/
+build/
+dist/
+out/
+*.zip
+!tools/fixtures/*.zip
+
+# Generated test fixture; tests/make_selftest.py rebuilds it on every build.
+tests/fixtures/selftest.bin
+
+# Local toolchains and downloaded packages
+refs/
+vendor/zig/
+vendor/SDL2/
+vendor/SDL2-linux/
+vendor/SDL2-linux-gnu/
+*.apk
+*.deb
+*.tar
+*.tar.gz
+*.tar.xz
+*.tar.zst
+*.7z
+
+# Research notes and MAME comparison scripts are kept locally, but are not
+# part of the player/build tree.
+cfg/
+docs/
+tests/make_fake_board.py
+tools/*.lua
+tools/compare_*.py
+tools/cmp_*.py
+
+# Editor / OS
+.vscode/
+.idea/
+.vs/
+*.user
+*.suo
+*.ncb
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Build output that can land outside build/
+*.exe
+*.dll
+*.pyd
+*.so
+*.so.*
+*.dylib
+*.a
+*.lib
+*.pdb
+*.ilk
+*.obj
+*.o
+*.res
+*.ico
+*.ppm
+*.wav
+crash.log
+crash-*.log
+*.log
+
+# Archived pre-1.0 git history (development only, never part of a release)
+/.history/
+
+# Local build assets
+/icon.png
+
+# Per-user runtime settings
+likethewind-settings.cfg
+fallback_report.txt
+mixes/
+
+# Python cache / virtualenvs
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Editor/merge leftovers
+*.tmp
+*.bak
+*.orig
+*.rej
+*.swp
+*~
