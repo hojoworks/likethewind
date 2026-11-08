@@ -70,6 +70,29 @@ chmod +x "$APPDIR/AppRun" "$APPDIR/usr/bin/LikeTheWind-linux"
 # Keep the exact runtime beside the bundled SDL2 so the AppImage starts even
 # when the host has no ALSA package installed.
 cp -L /usr/lib/x86_64-linux-gnu/libasound.so.2 "$APPDIR/usr/lib/libasound.so.2"
+
+# linuxdeploy intentionally leaves base desktop libraries such as libX11 to
+# the host. For a truly self-contained Linux release, pull in the full
+# non-glibc dependency closure instead of chasing the next missing SONAME.
+copy_closure() {
+    ldd "$APPDIR/usr/bin/LikeTheWind-linux" "$APPDIR"/usr/lib/*.so* 2>/dev/null |
+        awk '/=> \// { print $3 }' | sort -u |
+        while read -r lib; do
+            base=$(basename "$lib")
+            case "$base" in
+                libc.so.6|libm.so.6|libdl.so.2|libpthread.so.0|librt.so.1|ld-linux*)
+                    continue
+                    ;;
+            esac
+            if [ ! -e "$APPDIR/usr/lib/$base" ]; then
+                cp -L "$lib" "$APPDIR/usr/lib/$base"
+            fi
+        done
+}
+copy_closure
+copy_closure
+copy_closure
+
 mkdir -p "$ROOT/dist"
 OUT="$ROOT/dist/LikeTheWind-${VERSION}-x86_64.AppImage"
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" --no-appstream "$APPDIR" "$OUT"
