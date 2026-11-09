@@ -219,9 +219,9 @@ struct MixParams {
     int pcm_volume[16]{};
     int ym_send[8]{};
     int pcm_send[16]{};
-    int sfx_volume[16]{};
-    int sfx_send[16]{};
-    int sfx_reverb_send[16]{};
+    int sfx_volume[Settings::kSfxChannels]{};
+    int sfx_send[Settings::kSfxChannels]{};
+    int sfx_reverb_send[Settings::kSfxChannels]{};
     int ym_reverb_send[8]{};
     int pcm_reverb_send[16]{};
     bool chorus_enabled = false;
@@ -1300,7 +1300,7 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                               machine.translated_routine_total());
             float ym_levels[8] = {};
             float pcm_levels[16] = {};
-            float sfx_levels[16] = {};
+            float sfx_levels[Settings::kSfxChannels] = {};
             if ((!paused || menu.sound_test()) && machine.audio()) {
                 machine.audio()->get_levels(ym_levels, pcm_levels);
                 machine.audio()->get_sfx_levels(sfx_levels);

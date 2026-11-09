@@ -17,6 +17,7 @@ namespace likethewind {
 struct Settings {
     static constexpr int kChannelMax = 400;   // per-channel mixer headroom
     static constexpr int kBusMax = 200;       // master/music/SFX/engine boost
+    static constexpr int kSfxChannels = 18;   // 16 SFX strips + announcer/passing
 
     // DIP switches (1 = off in the raw port value; the menu stores the decoded
     // option number instead).
@@ -56,10 +57,11 @@ struct Settings {
     int pcm_send[16] = {0, 0, 0, 0, 0, 0, 0, 0,
                         0, 0, 0, 0, 0, 0, 0, 0};
     // Hojo's default SFX trims. The stock mix bypasses these and stays flat.
-    int sfx_lane_volume[16] = {130, 130, 130, 250, 250, 110, 130, 110,
-                               130, 130, 130, 130, 130, 130, 130, 150};
-    int sfx_lane_send[16] = {};
-    int sfx_lane_reverb_send[16] = {};
+    int sfx_lane_volume[kSfxChannels] = {130, 130, 130, 250, 250, 110, 130, 110,
+                                         130, 130, 130, 130, 130, 130, 130, 150,
+                                         130, 150};
+    int sfx_lane_send[kSfxChannels] = {};
+    int sfx_lane_reverb_send[kSfxChannels] = {};
     int ym_reverb_send[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     int pcm_reverb_send[16] = {0, 0, 0, 0, 0, 0, 0, 0,
                                0, 0, 0, 0, 0, 0, 0, 0};

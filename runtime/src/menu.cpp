@@ -51,8 +51,8 @@ std::string pcm_channel_name(int channel) {
 }
 
 std::string sfx_channel_name(int channel) {
-    if (channel == 14) return "ANNOUNCER";
-    if (channel == 15) return "PASSING";
+    if (channel == 16) return "ANNOUNCER";
+    if (channel == 17) return "PASSING";
     return "SFX" + std::to_string(channel + 1);
 }
 
@@ -252,7 +252,7 @@ std::vector<Menu::Item> Menu::items() const {
             out.push_back({"SFX", "", Kind::Action, 35});
         } else if (mixer_page_ == 3) {
             const bool stock = settings_.audio_preset == 0;
-            for (int i = 0; i < 16; ++i)
+            for (int i = 0; i < Settings::kSfxChannels; ++i)
                 out.push_back({sfx_channel_name(i),
                                std::to_string(stock ? 100 : settings_.sfx_lane_volume[i]),
                                Kind::Value, 300 + i,
@@ -387,7 +387,7 @@ void Menu::change(int delta) {
         break;
     case 4: {
         if (settings_.audio_preset == 0) break; // Stock bypasses channel trims.
-        if (it.id >= 300 && it.id < 316) {
+        if (it.id >= 300 && it.id < 300 + Settings::kSfxChannels) {
             settings_.sfx_lane_volume[it.id - 300] =
                 std::clamp(settings_.sfx_lane_volume[it.id - 300] + delta * 5,
                            0, Settings::kChannelMax);
@@ -671,7 +671,7 @@ MenuResult Menu::key(MenuKey k) {
         if (mixer_channels && sel_ >= 0 && sel_ < 24) {
             const int bit = sel_ < 8 ? sel_ : 8 + (sel_ - 8);
             settings_.solo_mask ^= (1u << bit);
-        } else if (sfx_channels && sel_ >= 0 && sel_ < 16) {
+        } else if (sfx_channels && sel_ >= 0 && sel_ < Settings::kSfxChannels) {
             settings_.solo_mask ^= (1u << (24 + sel_));
         }
         break;
@@ -747,7 +747,7 @@ void Menu::set_levels(const float *ym_levels, const float *pcm_levels) {
 
 void Menu::set_sfx_levels(const float *levels) {
     if (levels)
-        for (int i = 0; i < 16; ++i)
+        for (int i = 0; i < Settings::kSfxChannels; ++i)
             sfx_level_[i] = std::clamp(levels[i], 0.0f, 1.0f);
 }
 namespace menu_internal {

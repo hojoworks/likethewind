@@ -72,14 +72,15 @@ void apply_audio(likethewind::Audio &audio, const likethewind::Settings &s) {
     audio.set_volumes(s.music_volume, s.sfx_volume, s.engine_volume);
     if (s.ab_original) {
         static const int kUnity8[8] = {100, 100, 100, 100, 100, 100, 100, 100};
-        static const int kUnity16[16] = {100, 100, 100, 100, 100, 100, 100, 100,
-                                         100, 100, 100, 100, 100, 100, 100, 100};
+        static const int kUnity18[18] = {
+            100, 100, 100, 100, 100, 100, 100, 100, 100,
+            100, 100, 100, 100, 100, 100, 100, 100, 100};
         static const int kZero8[8] = {};
-        static const int kZero16[16] = {};
-        audio.set_channel_volumes(kUnity8, kUnity16);
-        audio.set_sfx_volumes(kUnity16, kZero16, kZero16);
-        audio.set_chorus_sends(kZero8, kZero16);
-        audio.set_reverb_sends(kZero8, kZero16);
+        static const int kZero18[18] = {};
+        audio.set_channel_volumes(kUnity8, kUnity18);
+        audio.set_sfx_volumes(kUnity18, kZero18, kZero18);
+        audio.set_chorus_sends(kZero8, kZero18);
+        audio.set_reverb_sends(kZero8, kZero18);
         audio.set_solo_mask(0);
         audio.set_chorus(false, 15, 50, 12, 0, 30);
         audio.set_reverb(false, 60, 40, 0, 25);

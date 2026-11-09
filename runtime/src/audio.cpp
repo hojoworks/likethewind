@@ -123,7 +123,7 @@ struct VirtualVoice {
 };
 
 constexpr int kMusicLanes = 14;
-constexpr int kSfxLanes = 24;
+constexpr int kSfxLanes = 64;
 constexpr int kEngineLanes = 2;
 constexpr int kFlexLanes = 2;
 constexpr int kLaneCount =
@@ -415,9 +415,10 @@ int sfx_category(uint8_t sample_id) {
     return 0;
 }
 
-constexpr int kAnnouncerSfxChannel = 14;
-constexpr int kPassingSfxChannel = 15;
-constexpr int kSfxCategoryLanes = 2;
+constexpr int kAnnouncerSfxChannel = 16;
+constexpr int kPassingSfxChannel = 17;
+constexpr int kSfxChannelCount = 18;
+constexpr int kSfxCategoryLanes = 16;
 constexpr int kSfxReservedLanes = kSfxCategoryLanes * 2;
 constexpr int kSfxGeneralLanes = kSfxLanes - kSfxReservedLanes;
 
@@ -559,15 +560,16 @@ struct Audio::Impl {
     int ym_send[8] = {100, 100, 100, 100, 100, 100, 100, 100};
     int pcm_send[16] = {100, 100, 100, 100, 100, 100, 100, 100,
                         100, 100, 100, 100, 100, 100, 100, 100};
-    int sfx_lane_volume[16] = {100, 100, 100, 100, 100, 100, 100, 100,
-                               100, 100, 100, 100, 100, 100, 100, 100};
-    int sfx_lane_send[16] = {};
-    int sfx_lane_reverb_send[16] = {};
+    int sfx_lane_volume[kSfxChannelCount] = {
+        100, 100, 100, 100, 100, 100, 100, 100, 100,
+        100, 100, 100, 100, 100, 100, 100, 100, 100};
+    int sfx_lane_send[kSfxChannelCount] = {};
+    int sfx_lane_reverb_send[kSfxChannelCount] = {};
     int solo_mask = 0;
     float ym_level[8] = {};
     float pcm_level[16] = {};
-    float sfx_level[16] = {};
-    float sfx_frame_peak[16] = {};
+    float sfx_level[kSfxChannelCount] = {};
+    float sfx_frame_peak[kSfxChannelCount] = {};
     float ym_frame_peak[8] = {};
     float pcm_frame_peak[16] = {};
     bool chorus_enabled = false;
@@ -669,9 +671,9 @@ struct Audio::Impl {
             const int base = lane_base(1);
             const int category = sfx_category(sample);
             if (category != 0) {
-                // Announcer and passing voices have two dedicated lanes each so
-                // overlapping lines still play, but both lanes feed the same
-                // mixer strip for a stable category volume.
+                // Announcer and passing voices have a large dedicated lane
+                // pool so overlapping countdowns or rapid passes do not cut
+                // each other off. All lanes feed the same category strip.
                 channel = category == 1 ? kAnnouncerSfxChannel
                                         : kPassingSfxChannel;
                 const int cat_base =
@@ -1256,7 +1258,7 @@ struct Audio::Impl {
             ym_level[ch] = std::max(ym_frame_peak[ch], ym_level[ch] * 0.82f);
         for (int v = 0; v < 16; ++v)
             pcm_level[v] = std::max(pcm_frame_peak[v], pcm_level[v] * 0.82f);
-        for (int v = 0; v < 16; ++v)
+        for (int v = 0; v < kSfxChannelCount; ++v)
             sfx_level[v] = std::max(sfx_frame_peak[v], sfx_level[v] * 0.82f);
     }
 };
@@ -1385,13 +1387,13 @@ void Audio::set_solo_mask(uint32_t mask) {
 void Audio::set_sfx_volumes(const int *volumes, const int *sends,
                             const int *reverb_sends) {
     if (volumes)
-        for (int i = 0; i < 16; ++i)
+        for (int i = 0; i < kSfxChannelCount; ++i)
             impl_->sfx_lane_volume[i] = std::clamp(volumes[i], 0, kChannelVolumeMax);
     if (sends)
-        for (int i = 0; i < 16; ++i)
+        for (int i = 0; i < kSfxChannelCount; ++i)
             impl_->sfx_lane_send[i] = std::clamp(sends[i], 0, 100);
     if (reverb_sends)
-        for (int i = 0; i < 16; ++i)
+        for (int i = 0; i < kSfxChannelCount; ++i)
             impl_->sfx_lane_reverb_send[i] = std::clamp(reverb_sends[i], 0, 100);
 }
 
@@ -1443,7 +1445,7 @@ void Audio::get_levels(float *ym_levels, float *pcm_levels) const {
 
 void Audio::get_sfx_levels(float *levels) const {
     if (levels)
-        for (int i = 0; i < 16; ++i)
+        for (int i = 0; i < kSfxChannelCount; ++i)
             levels[i] = impl_ ? std::clamp(impl_->sfx_level[i], 0.0f, 1.0f) : 0.0f;
 }
 

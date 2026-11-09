@@ -159,7 +159,7 @@ private:
     int send_focus_ = 0;   // 0 chorus send, 1 reverb send
     float ym_level_[8] = {};
     float pcm_level_[16] = {};
-    float sfx_level_[16] = {};
+    float sfx_level_[Settings::kSfxChannels] = {};
     long long frame_ = 0;
     double fps_ = 0.0;
     int display_hz_ = 60;

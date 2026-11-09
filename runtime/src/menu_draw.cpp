@@ -630,15 +630,15 @@ void Menu::draw_sfx(uint32_t *pixels, int width, int height, int px0,
     const uint32_t dim = 0xFF8896AA;
     const uint32_t hot = 0xFFFFD040;
     const uint32_t accent_base = 0xFFFF9A55;
-    const int col_w = 34;
+    const int col_w = 48;
     const int start_x = px0 + 12;
-    const int row_h = 38;
-    const int fh = 17;
+    const int row_h = 30;
+    const int fh = 12;
     const bool stock_mode = (!mixer_mode_ && settings_.audio_preset == 0);
 
     std::string status = "SFX CHANNELS";
     uint32_t status_color = hot;
-    if (sel_ >= 0 && sel_ < 16) {
+    if (sel_ >= 0 && sel_ < Settings::kSfxChannels) {
         const int i = sel_;
         const bool solo =
             !stock_mode && (settings_.solo_mask & (1u << (24 + i))) != 0;
@@ -651,13 +651,13 @@ void Menu::draw_sfx(uint32_t *pixels, int width, int height, int px0,
     }
     draw_small_text(pixels, width, height, px0 + 12, py0 + 44, status,
                     status_color);
-    for (int i = 0; i < 16; ++i) {
-        const int row = i / 8;
-        const int col = i % 8;
+    for (int i = 0; i < Settings::kSfxChannels; ++i) {
+        const int row = i / 6;
+        const int col = i % 6;
         const int cx = start_x + col * col_w;
         const int top = py0 + 58 + row * row_h;
-        const int fader_x = cx + 8;
-        const int vu_x = cx + 16;
+        const int fader_x = cx + 12;
+        const int vu_x = cx + 22;
         const int fy = top + 8;
         const bool active = (sel_ == i);
         const int volume = stock_mode ? 100 : settings_.sfx_lane_volume[i];
@@ -685,7 +685,7 @@ void Menu::draw_sfx(uint32_t *pixels, int width, int height, int px0,
 
     const int pw = std::min(304, width - 8);
     draw_button(pixels, width, height, px0 + (pw - 58) / 2, py0 + 170, 58,
-                "BACK", sel_ == 16, hot, dim);
+                "BACK", sel_ == Settings::kSfxChannels, hot, dim);
 }
 
 void Menu::draw_chorus(uint32_t *pixels, int width, int height, int px0,

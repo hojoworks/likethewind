@@ -103,7 +103,7 @@ void Settings::reset_mixer(bool flat) {
         pcm_send[i] = defaults.pcm_send[i];
         pcm_reverb_send[i] = defaults.pcm_reverb_send[i];
     }
-    for (int i = 0; i < 16; ++i) {
+    for (int i = 0; i < Settings::kSfxChannels; ++i) {
         sfx_lane_volume[i] = defaults.sfx_lane_volume[i];
         sfx_lane_send[i] = defaults.sfx_lane_send[i];
         sfx_lane_reverb_send[i] = defaults.sfx_lane_reverb_send[i];
@@ -211,13 +211,13 @@ bool Settings::load(const std::string &path) {
             if (i >= 0 && i < 16) pcm_reverb_send[i] = n;
         } else if (key.size() > 16 && key.compare(0, 16, "sfxlane_rev_send") == 0) {
             const int i = std::atoi(key.c_str() + 16) - 1;
-            if (i >= 0 && i < 16) sfx_lane_reverb_send[i] = n;
+            if (i >= 0 && i < Settings::kSfxChannels) sfx_lane_reverb_send[i] = n;
         } else if (key.size() > 12 && key.compare(0, 12, "sfxlane_send") == 0) {
             const int i = std::atoi(key.c_str() + 12) - 1;
-            if (i >= 0 && i < 16) sfx_lane_send[i] = n;
+            if (i >= 0 && i < Settings::kSfxChannels) sfx_lane_send[i] = n;
         } else if (key.size() > 7 && key.compare(0, 7, "sfxlane") == 0) {
             const int i = std::atoi(key.c_str() + 7) - 1;
-            if (i >= 0 && i < 16) sfx_lane_volume[i] = n;
+            if (i >= 0 && i < Settings::kSfxChannels) sfx_lane_volume[i] = n;
         } else if (key.size() > 7 && key.compare(0, 7, "ym_send") == 0) {
             const int i = std::atoi(key.c_str() + 7) - 1;
             if (i >= 0 && i < 8) ym_send[i] = n;
@@ -305,11 +305,11 @@ void Settings::save(const std::string &path) const {
         f << "ym_rev_send" << (i + 1) << "=" << ym_reverb_send[i] << "\n";
     for (int i = 0; i < 16; ++i)
         f << "pcm_rev_send" << (i + 1) << "=" << pcm_reverb_send[i] << "\n";
-    for (int i = 0; i < 16; ++i)
+    for (int i = 0; i < Settings::kSfxChannels; ++i)
         f << "sfxlane" << (i + 1) << "=" << sfx_lane_volume[i] << "\n";
-    for (int i = 0; i < 16; ++i)
+    for (int i = 0; i < Settings::kSfxChannels; ++i)
         f << "sfxlane_send" << (i + 1) << "=" << sfx_lane_send[i] << "\n";
-    for (int i = 0; i < 16; ++i)
+    for (int i = 0; i < Settings::kSfxChannels; ++i)
         f << "sfxlane_rev_send" << (i + 1) << "=" << sfx_lane_reverb_send[i] << "\n";
     f << "muted=" << (muted ? 1 : 0) << "\n"
       << "chorus=" << (chorus_enabled ? 1 : 0) << "\n"

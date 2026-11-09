@@ -215,10 +215,12 @@ int menutest() {
         Menu sfx_menu(sfx_settings);
         sfx_menu.toggle();
         for (int i = 0; i < 2; ++i) sfx_menu.key(MenuKey::TabPrev);  // MIXER
-        sfx_menu.key(MenuKey::Left);   // SFX action
+        sfx_menu.key(MenuKey::Enter);  // unlock mixer
+        for (int i = 0; i < 28; ++i) sfx_menu.key(MenuKey::Right);  // SFX action
         sfx_menu.key(MenuKey::Enter);
-        const float levels[16] = {0.8f, 0.5f, 0.2f, 0.7f, 0.1f, 0.4f, 0.6f, 0.3f,
-                                  0.9f, 0.2f, 0.5f, 0.7f, 0.1f, 0.4f, 0.6f, 0.3f};
+        const float levels[Settings::kSfxChannels] = {
+            0.8f, 0.5f, 0.2f, 0.7f, 0.1f, 0.4f, 0.6f, 0.3f, 0.9f,
+            0.2f, 0.5f, 0.7f, 0.1f, 0.4f, 0.6f, 0.3f, 0.5f, 0.6f};
         sfx_menu.set_sfx_levels(levels);
         std::fill(px.begin(), px.end(), 0xFF000000u);
         sfx_menu.draw(px.data(), Machine::kVisibleWidth, Machine::kVisibleLines);
