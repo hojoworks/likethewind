@@ -32,6 +32,7 @@ constexpr int kOutFrames = 800;          // 48000 / 60
 constexpr float kVoiceHighPassHz = 175.0f;
 constexpr float kAnnouncerHighPassHz = 250.0f;
 constexpr float kAnnouncerPostGainDb = -1.0f;
+constexpr float kFemalePostGainDb = -0.5f;
 // The PCM voices were recorded for a 31.46 kHz DAC. Keep the speech band but
 // roll off the top end before the 48 kHz resampler so high-frequency images
 // do not turn into aliasing noise. High enough to leave consonants intact.
@@ -732,7 +733,7 @@ struct Audio::Impl {
                               : g_sample_gender[sample] == 1
                                   ? 2.0f
                               : g_sample_gender[sample] == 2
-                                  ? 1.0f
+                                  ? 1.0f + kFemalePostGainDb
                               : g_sample_gender[sample] == 3
                                   ? 2.0f + kAnnouncerPostGainDb
                                   : 2.0f;
