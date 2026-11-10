@@ -728,9 +728,11 @@ struct Audio::Impl {
         const bool male_passing =
             g_sample_gender[sample] == 1 && g_sample_event[sample] == 1;
         const float gain_db = male_passing ? 0.0f
-                              : enemy_passing ? 2.0f
+                              : enemy_passing ? 1.0f
                               : g_sample_gender[sample] == 1
                                   ? 2.0f
+                              : g_sample_gender[sample] == 2
+                                  ? 1.0f
                               : g_sample_gender[sample] == 3
                                   ? 2.0f + kAnnouncerPostGainDb
                                   : 2.0f;
