@@ -602,7 +602,12 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
     const Uint64 perf_freq = SDL_GetPerformanceFrequency();
     Uint64 last = SDL_GetPerformanceCounter();
     double accumulator = frame_time;   // display the first frame immediately
-    double interp_age = frame_time;    // time since the newest board frame
+    Uint64 last_frame_run = last;      // when the newest board frame finished
+    // Presentation is scheduled on a fixed grid so the cadence comes from the
+    // clock, not from how long each frame's emulation and drawing happened to
+    // take. Zero means "not scheduled yet".
+    Uint64 next_present = 0;
+    int present_hz = 0;
     Uint64 rate_start = last;
     int rate_frames = 0;
     double measured_fps = 60.0;
@@ -678,7 +683,7 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
     auto reset_clock = [&]() {
         last = SDL_GetPerformanceCounter();
         accumulator = 0.0;
-        interp_age = 0.0;
+        last_frame_run = last;
         // Do not let the paused menu time contaminate the next FPS sample.
         rate_start = last;
         rate_frames = 0;
@@ -813,7 +818,6 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
     };
 
     while (running) {
-        const Uint64 loop_start = SDL_GetPerformanceCounter();
         crash_heartbeat();
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
@@ -991,7 +995,7 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         if (paused) {
             last = now;
             accumulator = 0.0;
-            interp_age = 0.0;
+            last_frame_run = now;
             // When the game is paused behind the menu, silence the game audio
             // too. The sound-test page is the exception: it needs the sound
             // board running so the selected track can be auditioned.
@@ -1011,7 +1015,6 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             }
         } else {
             accumulator += dt;
-            interp_age += dt;
             last = now;
             paused_audio_acc = 0.0;
             // Never let a stall cause a burst of game frames.
@@ -1141,7 +1144,7 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             apply_audio_settings();
             std::copy(machine.screen.begin(), machine.screen.end(), prev_screen.begin());
             machine.run_frame();
-            interp_age = 0.0;
+            last_frame_run = SDL_GetPerformanceCounter();
             queue_audio();
 
             const int mode_after =
@@ -1309,10 +1312,10 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             menu.set_sfx_levels(sfx_levels);
         }
 
-        // The loop is paced below to the selected presentation rate, so every
-        // iteration presents exactly one frame. In 60 FPS mode this keeps the
-        // output at 60 presents even on a 120/144 Hz display instead of
-        // repeating the newest board frame at the display refresh.
+        // One present per iteration, paced to the selected presentation rate.
+        // In 60 FPS mode this keeps the output at 60 presents even on a
+        // 120/144 Hz display instead of repeating the newest board frame at
+        // the display refresh.
         const bool do_present = true;
 
         if (settings.frame_rate != last_frame_rate) {
@@ -1324,10 +1327,50 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         }
 
         bool blended = false;
+        // Presentation target for this iteration. Pace to the selected mode,
+        // not the reported desktop refresh: SDL can report 60 Hz for a window
+        // on a high-refresh desktop (remote sessions, mixed-Hz monitors, some
+        // compositor modes). Outside the race itself use 60 Hz; the garage and
+        // course-load screens are sprite-heavy and gain nothing from extra
+        // interpolated frames. Keeping the menu at the selected rate also
+        // stops its PRESENT reading from showing 60 while it is open.
+        const int playback_mode =
+            (machine.shared[0xE09C] << 8) | machine.shared[0xE09D];
+        const bool racing = (playback_mode >= 20 && playback_mode <= 21);
+        const int target_hz =
+            std::max(1, (menu_up || racing) ? settings.frame_rate : 60);
+        const double target_interval = 1.0 / target_hz;
+
+        // Wait for this frame's presentation slot. The slot is a fixed grid
+        // rather than "now + interval": if the wait happened after the
+        // present, the spacing would pick up the difference in per-frame work
+        // (a frame that ran the emulation is heavier than one that only
+        // blended), which shows up as uneven motion at 120/144 Hz.
+        {
+            const Uint64 now = SDL_GetPerformanceCounter();
+            const Uint64 step = (Uint64)(target_interval * (double)perf_freq);
+            if (present_hz != target_hz || next_present == 0) {
+                present_hz = target_hz;
+                next_present = now + step;
+            }
+            for (;;) {
+                const Uint64 t = SDL_GetPerformanceCounter();
+                if (t >= next_present) break;
+                const double remain_ms =
+                    (double)(next_present - t) * 1000.0 / (double)perf_freq;
+                if (remain_ms > 1.5) SDL_Delay((Uint32)(remain_ms - 1.0));
+                // The last millisecond is a short spin so SDL's millisecond
+                // timer resolution does not pull the rate down.
+            }
+        }
+
         if (do_present) {
             double alpha = 1.0;
             if (!menu_up && settings.frame_rate > 60)
-                alpha = interp_age / frame_time;
+                // Measured at the slot, not when the board frame ran: the
+                // scheduling wait above would otherwise make the image stale.
+                alpha = (double)(SDL_GetPerformanceCounter() - last_frame_run) /
+                        (double)perf_freq / frame_time;
             if (frames <= 1) alpha = 1.0;
             alpha = std::clamp(alpha, 0.0, 1.0);
             const int ia = (int)(alpha * 256.0);
@@ -1445,35 +1488,13 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
         SDL_RenderPresent(ren);
 
-        // Pace the loop to the selected output rate. Without this, 60 FPS mode
-        // would present once per display refresh (e.g. 144 duplicates/second)
-        // because RenderPresent only waits for the next vblank.
-        // Pace to the selected mode, not the reported desktop refresh. SDL
-        // can report 60 Hz for a window on a high-refresh desktop (remote
-        // sessions, mixed-Hz monitors, and some compositor modes); the
-        // renderer's vsync already caps us at the real refresh. Keep the
-        // settings overlay at the selected rate too, so its PRESENT reading
-        // does not misleadingly show 60 while the menu is open. Outside the
-        // race itself, use 60 Hz: the garage and rotating course-load screens
-        // are sprite-heavy and do not benefit from extra interpolated frames.
-        const int playback_mode =
-            (machine.shared[0xE09C] << 8) | machine.shared[0xE09D];
-        const bool racing = (playback_mode >= 20 && playback_mode <= 21);
-        const int target_hz =
-            std::max(1, (menu_up || racing) ? settings.frame_rate : 60);
-        const double target_interval = 1.0 / target_hz;
-        const Uint64 deadline =
-            loop_start + (Uint64)(target_interval * (double)perf_freq);
-        for (;;) {
-            const Uint64 now = SDL_GetPerformanceCounter();
-            if (now >= deadline) break;
-            const double remain_ms =
-                (double)(deadline - now) * 1000.0 / (double)perf_freq;
-            if (remain_ms > 1.5)
-                SDL_Delay((Uint32)(remain_ms - 1.0));
-            // The last millisecond is a short spin so SDL's millisecond timer
-            // resolution does not pull 60 FPS down to the mid-50s.
-        }
+        // Advance the presentation grid. If a stall pushed us a whole slot
+        // behind, restart from the present that just happened instead of
+        // trying to catch up with a burst of duplicates.
+        const Uint64 presented_at = SDL_GetPerformanceCounter();
+        const Uint64 step = (Uint64)(target_interval * (double)perf_freq);
+        next_present += step;
+        if (next_present <= presented_at) next_present = presented_at + step;
     }
 
     save_settings_file();
