@@ -11,6 +11,7 @@ generated/
 build/
 dist/
 out/
+crashlogs/
 *.zip
 !tools/fixtures/*.zip
 

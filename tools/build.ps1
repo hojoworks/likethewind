@@ -30,6 +30,10 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
+# Never inherit the build machine's CPU feature set. A release built on an
+# AVX2/GFNI host must still start on baseline x86-64 Windows/Linux machines.
+$CpuFlags = @('-mcpu=baseline')
+
 # Release packages must include the coverage-guided native entry seeds. A
 # pointer/vector-only discovery build leaves thousands of routines on the
 # interpreter fallback.
@@ -152,7 +156,7 @@ Info 'compiling Musashi fallback core'
 $MusashiObjs = @()
 foreach ($f in @('tools\musashi\m68kcpu.c', 'tools\musashi\softfloat\softfloat.c', 'tools\musashi\musashi_glue.c', $Ops)) {
     $o = Join-Path $Obj ('musashi_' + [IO.Path]::GetFileNameWithoutExtension($f) + '.o')
-    & $Zig cc -O2 -w -Itools\musashi -Ibuild\musashi_gen -c $f -o $o
+    & $Zig cc @CpuFlags -O2 -w -Itools\musashi -Ibuild\musashi_gen -c $f -o $o
     if ($LASTEXITCODE -ne 0) { Fail "compile failed: $f" }
     $MusashiObjs += $o
 }
@@ -195,7 +199,7 @@ Info 'compiling runtime'
 $RuntimeObjs = @()
 foreach ($f in Get-ChildItem runtime\src\*.cpp) {
     $o = Join-Path $Obj ($f.BaseName + '.o')
-    & $Zig c++ -std=c++20 -O2 @RuntimeFlags -c $f.FullName -o $o
+    & $Zig c++ @CpuFlags -std=c++20 -O2 @RuntimeFlags -c $f.FullName -o $o
     if ($LASTEXITCODE -ne 0) { Fail "compile failed: $($f.Name)" }
     $RuntimeObjs += $o
 }
@@ -203,14 +207,14 @@ $RuntimeObjs += $MusashiObjs
 
 Info 'compiling Z80 and YM2151 cores'
 $Z80Obj = Join-Path $Obj 'z80.o'
-& $Zig cc -O2 -I vendor\z80 -c vendor\z80\z80.c -o $Z80Obj
+& $Zig cc @CpuFlags -O2 -I vendor\z80 -c vendor\z80\z80.c -o $Z80Obj
 if ($LASTEXITCODE -ne 0) { Fail 'Z80 core compile failed' }
 $YmfmObj = Join-Path $Obj 'ymfm_opm.o'
-& $Zig c++ -std=c++20 -O2 -I vendor\ymfm -c vendor\ymfm\ymfm_opm.cpp -o $YmfmObj
+& $Zig c++ @CpuFlags -std=c++20 -O2 -I vendor\ymfm -c vendor\ymfm\ymfm_opm.cpp -o $YmfmObj
 if ($LASTEXITCODE -ne 0) { Fail 'YM2151 core compile failed' }
 Info 'compiling miniz'
 $MinizObj = Join-Path $Obj 'miniz.o'
-& $Zig cc -O2 -w -I vendor\miniz -c vendor\miniz\miniz.c -o $MinizObj
+& $Zig cc @CpuFlags -O2 -w -I vendor\miniz -c vendor\miniz\miniz.c -o $MinizObj
 if ($LASTEXITCODE -ne 0) { Fail 'miniz compile failed' }
 $RuntimeObjs += @($Z80Obj, $YmfmObj, $MinizObj)
 
@@ -218,7 +222,7 @@ function Compile-Generated([string]$dir, [string]$tag) {
     $objs = @()
     foreach ($f in Get-ChildItem $dir -Filter *.c) {
         $o = Join-Path $Obj ("$tag" + $f.BaseName + '.o')
-        & $Zig cc -O2 -I runtime\include -c $f.FullName -o $o
+        & $Zig cc @CpuFlags -O2 -I runtime\include -c $f.FullName -o $o
         if ($LASTEXITCODE -ne 0) { Fail "compile failed: $($f.Name)" }
         $objs += $o
     }
@@ -263,7 +267,7 @@ if (Test-Path $IconPng) {
 
 $LinkInputs = @($AllObjs)
 if ($IconRes) { $LinkInputs += $IconRes }
-& $Zig c++ @LinkInputs -o $Exe @LinkFlags
+& $Zig c++ @CpuFlags @LinkInputs -o $Exe @LinkFlags
 if ($LASTEXITCODE -ne 0) { Fail 'link failed' }
 if ($HaveSdl) {
     Copy-Item (Join-Path $Sdl 'bin\SDL2.dll') $Build -Force
@@ -291,7 +295,7 @@ if ($Package) {
     if (-not $HaveSdl) { Fail 'packaging requires SDL2' }
     $ReleaseExe = Join-Path $Build 'LikeTheWind-release.exe'
     Info 'linking release (GUI subsystem)'
-    & $Zig c++ @LinkInputs -o $ReleaseExe @LinkFlags '-Wl,--subsystem,windows'
+    & $Zig c++ @CpuFlags @LinkInputs -o $ReleaseExe @LinkFlags '-Wl,--subsystem,windows'
     if ($LASTEXITCODE -ne 0) { Fail 'release link failed' }
 
     Info 'building portable Linux release'
@@ -324,7 +328,7 @@ if ($Package) {
     Copy-Item (Join-Path $Root 'vendor\z80\LICENSE') (Join-Path $Licenses 'z80.txt') -Force
     Copy-Item (Join-Path $SdlRoot 'LICENSE.txt') (Join-Path $Licenses 'SDL2.txt') -Force -ErrorAction SilentlyContinue
     $ReleaseReadme = @"
-LikeTheWind 1.3 - Power Drift
+LikeTheWind 1.4 - Power Drift
 =============================
 
 Windows:
@@ -332,7 +336,7 @@ Windows:
     Run LikeTheWind.exe.
 
 Linux x86_64:
-    Download LikeTheWind-1.3-linux-x86_64.tar.gz from the release page,
+    Download LikeTheWind-1.4-linux-x86_64.tar.gz from the release page,
     extract it, and put pdrift.zip in the roms folder:
         chmod +x LikeTheWind.AppImage
         ./LikeTheWind.AppImage

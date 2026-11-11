@@ -107,7 +107,7 @@ New-Item -ItemType Directory -Force -Path $Obj | Out-Null
 
 $Target = 'x86_64-linux-gnu.2.34'
 $Common = @(
-    '-target', $Target, '-O2',
+    '-target', $Target, '-O2', '-mcpu=baseline',
     '-I', 'runtime\include',
     '-I', 'tools\musashi',
     '-I', 'build\musashi_gen',
@@ -171,7 +171,7 @@ $Exe = Join-Path $Build 'LikeTheWind-linux'
 $Objects = Get-ChildItem $Obj -Filter *.o | ForEach-Object { $_.FullName }
 $Rpath = '-Wl,-rpath,$ORIGIN'
 Info 'linking glibc Linux executable'
-& $Zig c++ -target $Target -s @Objects $SdlSo $Rpath -ldl -lpthread -lm -o $Exe
+& $Zig c++ -target $Target -mcpu=baseline -s @Objects $SdlSo $Rpath -ldl -lpthread -lm -o $Exe
 if ($LASTEXITCODE -ne 0) { Fail 'Linux link failed' }
 
 # Keep the bundled SDL2 next to the executable; the RUNPATH above makes the

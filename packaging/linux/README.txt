@@ -1,4 +1,4 @@
-LikeTheWind 1.3 - Linux
+LikeTheWind 1.4 - Linux
 =======================
 
 1. Put your MAME pdrift.zip (World, Rev A) in the roms folder.
