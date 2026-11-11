@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/title-art.png" alt="LikeTheWind title art by P00TERMAN" width="360">
+</p>
+
 # LikeTheWind
 
 **Version 1.4**
