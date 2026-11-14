@@ -449,6 +449,7 @@ struct Audio::Impl {
     int current_lane[3][16] = {};
     uint8_t last_sample[16] = {};
     uint64_t lane_serial = 0;
+    uint32_t collision_events = 0;
     Audio::SampleLogCallback sample_log = nullptr;
     void *sample_log_user = nullptr;
 
@@ -723,6 +724,8 @@ struct Audio::Impl {
         v.active = true;
         v.serial = ++lane_serial;
         v.sample_id = sample;
+        if (g_sample_event[sample] == 2 || g_sample_event[sample] == 3)
+            ++collision_events;
         v.voice_effect = (group == 1 && is_voice_effect(sample));
         const bool enemy_passing =
             g_sample_gender[sample] == 4 && g_sample_event[sample] == 1;
@@ -1454,6 +1457,10 @@ void Audio::get_sfx_levels(float *levels) const {
     if (levels)
         for (int i = 0; i < kSfxChannelCount; ++i)
             levels[i] = impl_ ? std::clamp(impl_->sfx_level[i], 0.0f, 1.0f) : 0.0f;
+}
+
+uint32_t Audio::collision_events() const {
+    return impl_ ? impl_->collision_events : 0;
 }
 
 const int16_t *Audio::samples() const { return impl_->out.data(); }

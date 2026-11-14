@@ -159,6 +159,11 @@ std::vector<Menu::Item> Menu::items() const {
                            Kind::Value, 13});
             out.push_back({"CONTROLLER BINDINGS", "", Kind::Action, 10});
             out.push_back({"STEERING SETUP", "", Kind::Action, 11});
+            out.push_back({"RUMBLE", kOnOff[settings_.rumble ? 1 : 0],
+                           Kind::Value, 14});
+            out.push_back({"RUMBLE STRENGTH", fmt("%d%%", settings_.rumble_strength),
+                           Kind::Value, 15});
+            out.push_back({"TEST RUMBLE", "", Kind::Action, 16});
         }
         break;
     case 1:
@@ -185,8 +190,17 @@ std::vector<Menu::Item> Menu::items() const {
         out.push_back({"SHOW FPS", kOnOff[settings_.show_fps ? 1 : 0], Kind::Value, 3});
         out.push_back({"GEAR INDICATOR", kOnOff[settings_.show_gear ? 1 : 0], Kind::Value, 4});
         out.push_back({"GEAR CORNER", kGearCorner[settings_.gear_corner], Kind::Value, 5});
+        out.push_back({"SCANLINES", kOnOff[settings_.scanlines ? 1 : 0], Kind::Value, 7});
+        out.push_back({"SCANLINE INTENSITY",
+                       fmt("%d%%", settings_.scanline_intensity), Kind::Value, 8});
         out.push_back({"FULLSCREEN", kOnOff[settings_.fullscreen ? 1 : 0],
                        Kind::Value, 6});
+        const std::string monitor_value =
+            display_count_ > 1
+                ? std::to_string(settings_.monitor + 1) + "/" +
+                      std::to_string(display_count_)
+                : std::to_string(settings_.monitor + 1);
+        out.push_back({"MONITOR", monitor_value, Kind::Value, 9});
         out.push_back({"", "", Kind::Info, 0});
         out.push_back({"DISPLAY", fmt("%d HZ", display_hz_), Kind::Info, 0});
         out.push_back({"PRESENT",
@@ -333,6 +347,10 @@ void Menu::change(int delta) {
         else if (it.id == 13) settings_.auto_gear = delta > 0;
         else if (it.id == 7) settings_.pad_steer_rate = std::clamp(settings_.pad_steer_rate + delta, 0, 24);
         else if (it.id == 8) settings_.steer_rebound_speed = std::clamp(settings_.steer_rebound_speed + delta, 1, 10);
+        else if (it.id == 14) settings_.rumble = delta > 0;
+        else if (it.id == 15)
+            settings_.rumble_strength =
+                std::clamp(settings_.rumble_strength + delta * 5, 0, 100);
         break;
     case 1:
         if (it.id == 0) settings_.coin_a = (uint8_t)wrap(settings_.coin_a, 0, 15, delta);
@@ -362,7 +380,14 @@ void Menu::change(int delta) {
         } else if (it.id == 3) settings_.show_fps = delta > 0;
         else if (it.id == 4) settings_.show_gear = delta > 0;
         else if (it.id == 5) settings_.gear_corner = wrap(settings_.gear_corner, 0, 3, delta);
+        else if (it.id == 7) settings_.scanlines = delta > 0;
+        else if (it.id == 8)
+            settings_.scanline_intensity =
+                std::clamp(settings_.scanline_intensity + delta * 5, 0, 100);
         else if (it.id == 6) settings_.fullscreen = delta > 0;
+        else if (it.id == 9 && display_count_ > 1)
+            settings_.monitor =
+                wrap(settings_.monitor, 0, display_count_ - 1, delta);
         break;
     case 3:
         if (it.id == 0)
@@ -442,8 +467,10 @@ void Menu::activate() {
     if (it.kind != Kind::Value) return;
 
     // Toggles flip; everything else advances one step.
-    const bool toggle = (tab_ == 0 && (it.id == 5 || it.id == 12 || it.id == 13)) ||
-                        (tab_ == 2 && (it.id == 3 || it.id == 4 || it.id == 6)) ||
+    const bool toggle = (tab_ == 0 && (it.id == 5 || it.id == 12 || it.id == 13 ||
+                                       it.id == 14)) ||
+                        (tab_ == 2 && (it.id == 3 || it.id == 4 || it.id == 6 ||
+                                       it.id == 7)) ||
                         (tab_ == 3 && it.id == 4) ||
                         (tab_ == 3 && it.id == 5) ||
                         (tab_ == 3 && (it.id == 7 || it.id == 8)) ||
@@ -456,9 +483,11 @@ void Menu::activate() {
             settings_.racing_wheel = !settings_.racing_wheel;
         else if (tab_ == 0 && it.id == 13)
             settings_.auto_gear = !settings_.auto_gear;
+        else if (tab_ == 0 && it.id == 14) settings_.rumble = !settings_.rumble;
         else if (tab_ == 2 && it.id == 3) settings_.show_fps = !settings_.show_fps;
         else if (tab_ == 2 && it.id == 4) settings_.show_gear = !settings_.show_gear;
         else if (tab_ == 2 && it.id == 6) settings_.fullscreen = !settings_.fullscreen;
+        else if (tab_ == 2 && it.id == 7) settings_.scanlines = !settings_.scanlines;
         else if (tab_ == 3 && it.id == 4) settings_.muted = !settings_.muted;
         else if (tab_ == 3 && it.id == 5) {
             settings_.audio_preset = settings_.audio_preset ? 0 : 1;
@@ -591,6 +620,8 @@ MenuResult Menu::key(MenuKey k) {
             } else if (id == 36) {
                 mixer_page_ = 0;
                 sel_ = 0;
+            } else if (id == 16 && tab_ == 0) {
+                r.rumble_test = true;
             }
         } else if (!mixer_channels) {
             activate();

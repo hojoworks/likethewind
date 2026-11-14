@@ -36,6 +36,7 @@ struct Settings {
     int aspect = 1;
     int scale = 3;
     bool fullscreen = false;    // borderless desktop fullscreen
+    int monitor = 0;            // 0-based SDL display index for window/fullscreen
     // Presentation mode: 60 = crisp board-rate output, 120/144 = interpolate
     // toward that display refresh (the host still runs the board at 60 Hz).
     int frame_rate = 60;
@@ -43,6 +44,10 @@ struct Settings {
     bool show_gear = true;      // draw the gearshift indicator
     int gear_corner = 1;        // 0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right
     bool auto_gear = false;     // shift automatically at the speed threshold
+    // CRT-style scanlines darken every other rendered row. The intensity is
+    // the percentage of black mixed into the dark rows.
+    bool scanlines = true;
+    int scanline_intensity = 25; // 0..100
 
     // Audio
     int audio_preset = 1;       // 0 stock (flat), 1 per-song custom mixes
@@ -108,6 +113,8 @@ struct Settings {
     int centre_rate = 5;        // steering return strength, 0..10
     int steer_rebound = 10;     // counter-steer pulse after crossing centre
     int steer_rebound_speed = 5; // return speed during the rebound, 1..10
+    bool rumble = true;         // force feedback while racing
+    int rumble_strength = 100;  // 0..100
 
     // Gamepad button assignments. These are SDL_GameControllerButton values;
     // -1 means unbound.

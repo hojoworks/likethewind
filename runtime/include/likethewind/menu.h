@@ -36,6 +36,7 @@ struct MenuResult {
     bool close = false;
     bool quit = false;
     bool reset = false;
+    bool rumble_test = false;
     int sound_cmd = -1;   // sound-board command requested by the sound test
 };
 
@@ -51,6 +52,11 @@ public:
 
     bool visible() const { return open_; }
     bool sound_test() const { return open_ && tab_ == 3 && audio_page_ == 1; }
+    // Keep the scanline effect visible while its two Video rows are selected
+    // so intensity/toggle changes can be judged live.
+    bool scanline_preview() const {
+        return open_ && tab_ == 2 && (sel_ == 6 || sel_ == 7);
+    }
     void toggle() {
         open_ = !open_;
         if (open_ && mixer_mode_) {
@@ -97,6 +103,12 @@ public:
         fps_ = fps;
     }
     void set_display_hz(int hz) { display_hz_ = hz > 0 ? hz : 60; }
+    void set_display_count(int count) {
+        display_count_ = count > 0 ? count : 1;
+        if (settings_.monitor < 0) settings_.monitor = 0;
+        if (settings_.monitor >= display_count_)
+            settings_.monitor = display_count_ - 1;
+    }
     void set_present_stats(double fps, int blend_pct) {
         present_fps_ = fps;
         blend_pct_ = blend_pct;
@@ -163,6 +175,7 @@ private:
     long long frame_ = 0;
     double fps_ = 0.0;
     int display_hz_ = 60;
+    int display_count_ = 1;
     double present_fps_ = 0.0;
     int blend_pct_ = 0;
     bool mixer_mode_ = false;

@@ -800,34 +800,38 @@ void Menu::draw_controls(uint32_t *pixels, int width, int height, int px0,
     const uint32_t dim = 0xFF8896AA;
     const uint32_t label_color = 0xFFDCE4EE;
     const int x_label = px0 + 10;
-    const int x_keyboard = px0 + 72;
-    const int x_pad = px0 + 174;
-    // Leave a clear gap below the five Input rows before the controls table.
-    const int y_header = py0 + 108;
-    draw_small_text(pixels, width, height, x_label, y_header, "CONTROL", dim);
-    draw_small_text(pixels, width, height, x_keyboard, y_header, "KEYBOARD", dim);
-    draw_small_text(pixels, width, height, x_pad, y_header, "PAD", dim);
+    const int x_value = px0 + 64;
+    const int x_label2 = px0 + 160;
+    const int x_value2 = px0 + 210;
+    // Two compact columns leave room for the Input rows above.
+    const int y_header = py0 + 138;
+    draw_small_text(pixels, width, height, x_label, y_header, "CONTROLS",
+                    dim);
 
     struct ControlRow {
         const char *control;
-        const char *keyboard;
-        const char *pad;
+        const char *keys;
     };
-    static const ControlRow rows[] = {
-        {"STEER", "ARROWS / A D", "STICK"},
-        {"GAS", "UP / W", "RT"},
-        {"BRAKE", "DOWN / S", "LT"},
-        {"GEAR", "SPACE", "PAD Y"},
-        {"START", "1 / ENTER", "PAD START"},
-        {"COIN", "5 / C", "PAD BACK"},
+    static const ControlRow left_rows[] = {
+        {"STEER", "ARROWS / STICK"},
+        {"GAS", "UP / W / RT"},
+        {"BRAKE", "DOWN / S / LT"},
     };
-    for (int i = 0; i < (int)(sizeof(rows) / sizeof(rows[0])); ++i) {
+    static const ControlRow right_rows[] = {
+        {"GEAR", "SPACE / Y"},
+        {"START", "1 / ENTER / START"},
+        {"COIN", "5 / C / BACK"},
+    };
+    for (int i = 0; i < 3; ++i) {
         const int y = y_header + 10 + i * 10;
-        draw_small_text(pixels, width, height, x_label, y, rows[i].control,
-                        label_color);
-        draw_small_text(pixels, width, height, x_keyboard, y, rows[i].keyboard,
+        draw_small_text(pixels, width, height, x_label, y,
+                        left_rows[i].control, label_color);
+        draw_small_text(pixels, width, height, x_value, y, left_rows[i].keys,
                         dim);
-        draw_small_text(pixels, width, height, x_pad, y, rows[i].pad, dim);
+        draw_small_text(pixels, width, height, x_label2, y,
+                        right_rows[i].control, label_color);
+        draw_small_text(pixels, width, height, x_value2, y, right_rows[i].keys,
+                        dim);
     }
 }
 

@@ -107,6 +107,10 @@ int menutest() {
             menu.key(MenuKey::Right);
             if (settings.steer_rebound_speed != 6) steering_setup_ok = false;
             menu.key(MenuKey::Back);
+            for (int i = 0; i < 5; ++i) menu.key(MenuKey::Down);
+            menu.key(MenuKey::Left);    // RUMBLE off
+            menu.key(MenuKey::Down);    // RUMBLE STRENGTH
+            menu.key(MenuKey::Left);
         }
         if (tab == 1) {
             // Exercise the DIP editing path: select CABINET and set MOVING.
@@ -123,6 +127,10 @@ int menutest() {
             menu.key(MenuKey::Right);
             menu.key(MenuKey::Right);
             for (int i = 0; i < 3; i++) menu.key(MenuKey::Down);
+            menu.key(MenuKey::Right);
+            menu.key(MenuKey::Down);    // SCANLINES
+            menu.key(MenuKey::Left);    // off
+            menu.key(MenuKey::Down);    // SCANLINE INTENSITY
             menu.key(MenuKey::Right);
         }
         if (tab == 3) {
@@ -266,6 +274,11 @@ int menutest() {
                            loaded.engine_volume == settings.engine_volume &&
                            loaded.show_gear == settings.show_gear &&
                            loaded.gear_corner == settings.gear_corner &&
+                           loaded.monitor == settings.monitor &&
+                           loaded.scanlines == settings.scanlines &&
+                           loaded.scanline_intensity == settings.scanline_intensity &&
+                           loaded.rumble == settings.rumble &&
+                           loaded.rumble_strength == settings.rumble_strength &&
                            loaded.frame_rate == settings.frame_rate &&
                            loaded.audio_preset == settings.audio_preset &&
                            loaded.run_in_menu == settings.run_in_menu &&
@@ -315,6 +328,23 @@ int menutest() {
                              axis_settings.pad_gas_axis_invert;
         std::printf("menutest: axis bindings %s\n",
                     axis_ok ? "PASS" : "FAIL");
+    }
+    {
+        Settings monitor_settings;
+        Menu monitor_menu(monitor_settings);
+        monitor_menu.toggle();
+        monitor_menu.set_display_count(3);
+        monitor_menu.key(MenuKey::TabNext);
+        monitor_menu.key(MenuKey::TabNext);
+        monitor_menu.set_selection(9);   // MONITOR
+        monitor_menu.key(MenuKey::Right);
+        bool monitor_ok = monitor_settings.monitor == 1;
+        monitor_menu.key(MenuKey::Right);
+        monitor_ok = monitor_ok && monitor_settings.monitor == 2;
+        monitor_menu.key(MenuKey::Right);
+        monitor_ok = monitor_ok && monitor_settings.monitor == 0;
+        std::printf("menutest: monitor selection %s\n",
+                    monitor_ok ? "PASS" : "FAIL");
     }
     {
         Machine course_machine;

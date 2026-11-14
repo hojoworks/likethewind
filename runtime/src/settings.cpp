@@ -23,8 +23,11 @@ void Settings::clamp() {
     allow_continue = (uint8_t)std::clamp<int>(allow_continue, 0, 1);
     difficulty = (uint8_t)std::clamp<int>(difficulty, 0, 3);
     scale = std::clamp(scale, 1, 5);
+    monitor = std::clamp(monitor, 0, 15);
     if (frame_rate != 60 && frame_rate != 120 && frame_rate != 144) frame_rate = 60;
     gear_corner = std::clamp(gear_corner, 0, 3);
+    scanline_intensity = std::clamp(scanline_intensity, 0, 100);
+    rumble_strength = std::clamp(rumble_strength, 0, 100);
     audio_preset = std::clamp(audio_preset, 0, 1);
     volume = std::clamp(volume, 0, kBusMax);
     music_volume = std::clamp(music_volume, 0, kBusMax);
@@ -189,6 +192,7 @@ bool Settings::load(const std::string &path) {
         else if (key == "widescreen") aspect = n != 0 ? 1 : 0;
         else if (key == "scale") scale = n;
         else if (key == "fullscreen") fullscreen = n != 0;
+        else if (key == "monitor") monitor = n;
         else if (key == "frame_rate") {
             frame_rate = n;
             have_frame_rate = true;
@@ -198,6 +202,10 @@ bool Settings::load(const std::string &path) {
         } else if (key == "show_fps") show_fps = n != 0;
         else if (key == "show_gear") show_gear = n != 0;
         else if (key == "gear_corner") gear_corner = n;
+        else if (key == "scanlines") scanlines = n != 0;
+        else if (key == "scanline_intensity") scanline_intensity = n;
+        else if (key == "rumble") rumble = n != 0;
+        else if (key == "rumble_strength") rumble_strength = n;
         else if (key == "audio_preset") audio_preset = n;
         else if (key == "volume") volume = n;
         else if (key == "music_volume") music_volume = n;
@@ -288,10 +296,15 @@ void Settings::save(const std::string &path) const {
       << "aspect=" << aspect << "\n"
       << "scale=" << scale << "\n"
       << "fullscreen=" << (fullscreen ? 1 : 0) << "\n"
+      << "monitor=" << monitor << "\n"
       << "frame_rate=" << frame_rate << "\n"
       << "show_fps=" << (show_fps ? 1 : 0) << "\n"
       << "show_gear=" << (show_gear ? 1 : 0) << "\n"
       << "gear_corner=" << gear_corner << "\n"
+      << "scanlines=" << (scanlines ? 1 : 0) << "\n"
+      << "scanline_intensity=" << scanline_intensity << "\n"
+      << "rumble=" << (rumble ? 1 : 0) << "\n"
+      << "rumble_strength=" << rumble_strength << "\n"
       << "audio_preset=" << audio_preset << "\n"
       << "volume=" << volume << "\n"
       << "music_volume=" << music_volume << "\n"

@@ -1,5 +1,6 @@
 # Game data and everything derived from it. Never commit these.
 roms/
+leaderboard/
 /pdrift/
 /pdrifta/
 mame/

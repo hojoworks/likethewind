@@ -121,6 +121,33 @@ LikeTheWind supports **4:3, 16:9, 18:9, 19:9, 20:9 and 21:9** aspect ratios,
 with **60, 120 and 144 FPS** modes. New installs default to **16:9 @ 60 FPS**.
 60 FPS presents one new board frame per refresh (60 presents/sec); 120 and 144
 add cross-faded in-between frames, capped by the display refresh rate.
+**Monitor** selects which connected display the window and fullscreen mode use.
+
+### Scanlines
+
+The Video page has a subtle CRT scanline overlay. **Scanlines** turns it on or
+off, and **Scanline Intensity** sets how much the beam gaps are dimmed (25% by
+default). It uses a soft beam profile at the window resolution, so the lines
+stay fine instead of becoming thick bands. The settings menu stays crisp,
+except while you are adjusting the scanline controls, when the effect is shown
+for live preview.
+
+### Force feedback
+
+Controllers with rumble motors get a rhythmic key-hit and two vroom-vroom
+bursts through the stage introduction, cornering feedback that follows the
+game's actual road rotation
+rather than raw stick input, and a high-frequency-led impact when you hit a wall
+or car. Cornering uses the small motor for tire/slip feedback that rises and
+falls with the throttle, while the heavy motor adds a gently breathing grip
+texture. Lifting off and getting back on the throttle in a corner gives a small
+extra kick as the pedal reaches full travel, and braking in a corner speeds up
+the small-motor pulse for a tire-squeal feel. A full-throttle launch adds a
+long high-motor burnout ramp, and any active rumble trails off over 1.5 seconds
+when a race ends. There is no idle
+rumble. **Rumble** and **Rumble Strength** are on the Controls page; **Test
+Rumble** pulses both motors at the current Rumble Strength so you can check the
+controller without starting a race.
 
 ### Audio
 

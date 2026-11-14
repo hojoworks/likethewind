@@ -40,6 +40,10 @@ public:
     void get_levels(float *ym_levels, float *pcm_levels) const;
     void get_sfx_levels(float *levels) const;
 
+    // Monotonic count of wall/enemy hit samples started. The host uses the
+    // delta to fire force-feedback impulses on collisions.
+    uint32_t collision_events() const;
+
     const int16_t *samples() const;
     size_t sample_count() const;
 
