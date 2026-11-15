@@ -510,33 +510,6 @@ struct Audio::Impl {
     uint8_t ym_kf[8] = {};
     uint8_t ym_regs[256] = {};
     bool ym_route_sfx[8] = {};
-    std::vector<uint32_t> ym_music_signatures;
-    bool ym_music_profile_loaded = false;
-
-    void load_ym_music_signatures(const char *path) {
-        ym_music_signatures.clear();
-        ym_music_profile_loaded = false;
-        std::ifstream f(path);
-        if (!f) return;
-        std::string line;
-        while (std::getline(f, line)) {
-            if (!line.empty() && line.back() == '\r') line.pop_back();
-            if (line.empty() || line[0] == '#') continue;
-            try {
-                ym_music_signatures.push_back(
-                    (uint32_t)std::stoul(line, nullptr, 16));
-            } catch (...) {
-                // Ignore malformed profile lines.
-            }
-        }
-        std::sort(ym_music_signatures.begin(), ym_music_signatures.end());
-        ym_music_profile_loaded = !ym_music_signatures.empty();
-    }
-
-    bool is_ym_music_signature(uint32_t sig) const {
-        return std::binary_search(ym_music_signatures.begin(),
-                                  ym_music_signatures.end(), sig);
-    }
 
     uint32_t ym_signature(int ch) const {
         uint32_t h = 2166136261u;
@@ -838,7 +811,12 @@ struct Audio::Impl {
                 x.ctrl = v;
                 x.group = group;
                 if (lane) lane->pcm.ctrl = v;
-                if ((v & 1) == 0 && sample != 0 && sample != 0xFF &&
+                // 0xFF is the engine loop on the two continuous PCM voices.
+                // It is a real sample, not an empty/unset slot, so let the
+                // engine group start it like any other lane.
+                const bool engine_sample = sample == 0xFF && group == 2;
+                if ((v & 1) == 0 && sample != 0 &&
+                    (sample != 0xFF || engine_sample) &&
                     (!lane || (old_ctrl & 1) != 0 ||
                      sample != last_sample[voice])) {
                     start_lane(voice, group, (uint8_t)sample);
@@ -918,12 +896,11 @@ struct Audio::Impl {
                     const bool known_sfx =
                         is_ym_sfx_signature(sig) ||
                         is_ym_sfx_keycode(ch, ym_keycode[ch]);
-                    const bool known_music =
-                        ym_music_profile_loaded && is_ym_music_signature(sig);
-                    const bool unknown_shared =
-                        ym_music_profile_loaded && !known_music &&
-                        (ch == 6 || ch == 7);
-                    ym_route_sfx[ch] = known_sfx || unknown_shared;
+                    // Channels 6/7 also carry ordinary music notes. Treat
+                    // only the known effect signatures/key codes as SFX;
+                    // otherwise music can leak onto the SFX bus (and remain
+                    // audible when the music bus is muted).
+                    ym_route_sfx[ch] = known_sfx;
                     ym_passing_chime[ch] =
                         is_ym_chime_keycode(ch, ym_keycode[ch]);
                     if (trace && ym_passing_chime[ch]) {
@@ -1361,7 +1338,6 @@ void Audio::reset(const std::vector<uint8_t> &z80_rom,
     impl_->z80_rom = &z80_rom;
     impl_->pcm_rom = &pcm_rom;
     load_sample_roles("samples/roles.cfg");
-    impl_->load_ym_music_signatures("samples/ym_music_signatures.cfg");
     std::memset(impl_->sound_ram, 0, sizeof(impl_->sound_ram));
     std::memset(impl_->pcm_ram, 0, sizeof(impl_->pcm_ram));
     for (auto &v : impl_->voices) v = PcmVoice{};
