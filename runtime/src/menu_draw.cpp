@@ -482,7 +482,7 @@ void Menu::draw_mixer(uint32_t *pixels, int width, int height, int px0, int py0)
     if (sel_ >= 0 && sel_ < 24) {
         const bool is_ym = sel_ < 8;
         const int i = is_ym ? sel_ : sel_ - 8;
-        const bool solo = (settings_.solo_mask & (1u << (is_ym ? i : 8 + i))) != 0;
+        const bool solo = (settings_.solo_mask & (1ull << (is_ym ? i : 8 + i))) != 0;
         status = tag;
         status += (is_ym ? "YM" + std::to_string(i + 1) : pcm_channel_name(i)) +
                   " VOL " +
@@ -517,8 +517,11 @@ void Menu::draw_mixer(uint32_t *pixels, int width, int height, int px0, int py0)
             status = settings_.ab_original ? "A/B  ORIGINAL" : "A/B  MIXED";
         }
         status_color = hot;
-    } else {
+    } else if (sel_ == 27) {
         status = tag + "RESET ALL CHANNELS AND FX";
+        status_color = hot;
+    } else if (sel_ == 28) {
+        status = tag + "SFX CHANNELS";
         status_color = hot;
     }
     draw_small_text(pixels, width, height, px0 + 12, py0 + 44, status, status_color);
@@ -539,7 +542,7 @@ void Menu::draw_mixer(uint32_t *pixels, int width, int height, int px0, int py0)
         const bool active = (sel_ == idx);
         const bool is_ym = idx < 8;
         const int i = is_ym ? idx : idx - 8;
-        const bool solo = (settings_.solo_mask & (1u << (is_ym ? i : 8 + i))) != 0;
+        const bool solo = (settings_.solo_mask & (1ull << (is_ym ? i : 8 + i))) != 0;
         const int volume =
             stock_mode ? 100 : (is_ym ? settings_.ym_volume[i] : settings_.pcm_volume[i]);
         const int send =
@@ -619,7 +622,7 @@ void Menu::draw_sfx(uint32_t *pixels, int width, int height, int px0,
     if (sel_ >= 0 && sel_ < Settings::kSfxChannels) {
         const int i = sel_;
         const bool solo =
-            !stock_mode && (settings_.solo_mask & (1u << (24 + i))) != 0;
+            !stock_mode && (settings_.solo_mask & (1ull << (24 + i))) != 0;
         status = sfx_channel_name(i) + "  VOL " +
                  std::to_string(stock_mode ? 100 : settings_.sfx_lane_volume[i]);
         if (solo) {
@@ -642,7 +645,7 @@ void Menu::draw_sfx(uint32_t *pixels, int width, int height, int px0,
         const float level = sfx_level_[i];
         const std::string label = sfx_channel_name(i);
         const bool solo =
-            !stock_mode && (settings_.solo_mask & (1u << (24 + i))) != 0;
+            !stock_mode && (settings_.solo_mask & (1ull << (24 + i))) != 0;
         const uint32_t accent = solo ? 0xFFFF5A9A : (active ? hot : accent_base);
 
         draw_small_text(pixels, width, height,
@@ -792,8 +795,8 @@ void Menu::draw_controls(uint32_t *pixels, int width, int height, int px0,
     };
     static const ControlRow left_rows[] = {
         {"STEER", "ARROWS / STICK"},
-        {"GAS", "UP / W / RT"},
-        {"BRAKE", "DOWN / S / LT"},
+        {"GAS", "UP / W / A / RT"},
+        {"BRAKE", "DOWN / S / B / LT"},
     };
     static const ControlRow right_rows[] = {
         {"GEAR", "SPACE / Y"},

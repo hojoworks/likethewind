@@ -571,7 +571,7 @@ struct Audio::Impl {
         100, 100, 100, 100, 100, 100, 100, 100, 100};
     int sfx_lane_send[kSfxChannelCount] = {};
     int sfx_lane_reverb_send[kSfxChannelCount] = {};
-    int solo_mask = 0;
+    uint64_t solo_mask = 0;
     float ym_level[8] = {};
     float pcm_level[16] = {};
     float sfx_level[kSfxChannelCount] = {};
@@ -970,7 +970,7 @@ struct Audio::Impl {
         const int *rev_send = group == 1 ? sfx_lane_reverb_send : pcm_reverb_send;
         const int solo_bit = group == 1 ? 24 + channel : 8 + channel;
         const bool solo_mute =
-            solo_mask != 0 && !(solo_mask & (1u << solo_bit));
+            solo_mask != 0 && !(solo_mask & (1ull << solo_bit));
         const int gain = solo_mute ? 0 : bus * volume[channel] / 100;
         x.lout = v * (x.lvol & 0x7F) * gain / 100;
         x.rout = v * (x.rvol & 0x7F) * gain / 100;
@@ -1113,7 +1113,7 @@ struct Audio::Impl {
         int32_t l = 0, r = 0, sl = 0, sr = 0, rl = 0, rr = 0;
         for (int ch = 0; ch < 8; ++ch) {
             const bool solo_mute =
-                solo_mask != 0 && !(solo_mask & (1u << ch));
+                solo_mask != 0 && !(solo_mask & (1ull << ch));
             const int bus = ym_route_sfx[ch] ? sfx_volume : music_volume;
             const int trim =
                 ym_passing_chime[ch]
@@ -1395,8 +1395,8 @@ void Audio::set_chorus_sends(const int *ym_percent, const int *pcm_percent) {
             impl_->pcm_send[i] = std::clamp(pcm_percent[i], 0, 100);
 }
 
-void Audio::set_solo_mask(uint32_t mask) {
-    impl_->solo_mask = (int)(mask & 0xFFFFFFFFu);
+void Audio::set_solo_mask(uint64_t mask) {
+    impl_->solo_mask = mask;
 }
 
 void Audio::set_sfx_volumes(const int *volumes, const int *sends,

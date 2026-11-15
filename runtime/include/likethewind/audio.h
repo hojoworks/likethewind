@@ -31,7 +31,7 @@ public:
                          const int *reverb_sends);
     void set_chorus_sends(const int *ym_percent, const int *pcm_percent);
     void set_reverb_sends(const int *ym_percent, const int *pcm_percent);
-    void set_solo_mask(uint32_t mask);
+    void set_solo_mask(uint64_t mask);
     void set_chorus(bool enabled, int rate_tenths, int depth_percent,
                     int delay_ms, int feedback_percent, int mix_percent);
     void set_reverb(bool enabled, int decay_percent, int damping_percent,

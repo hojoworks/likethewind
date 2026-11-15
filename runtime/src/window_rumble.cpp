@@ -2,6 +2,7 @@
 
 #ifdef LIKETHEWIND_HAVE_SDL
 #include "likethewind/audio.h"
+#include "likethewind/bytes.h"
 #include "likethewind/machine.h"
 
 #include <algorithm>
@@ -49,15 +50,19 @@ void update_rumble(SDL_GameController *pad, bool supported, const Settings &s,
     const uint32_t collisions =
         m.audio() ? m.audio()->collision_events() : 0;
     if (collisions != state.collisions) {
-        if (debug) {
-            std::fprintf(stderr,
-                         "[rumble] hit sample +%u speed=%d racing=%d\n",
-                         (unsigned)(collisions - state.collisions), speed,
-                         racing ? 1 : 0);
-        }
-        if (racing && enabled && supported) {
-            state.impulse = 1.0f;
-            state.reissue_at = 0;   // send the impact peak immediately
+        // A lower count means the audio board was recreated (game reset),
+        // not a new collision. Only a real increment should kick the motors.
+        if (collisions > state.collisions) {
+            if (debug) {
+                std::fprintf(stderr,
+                             "[rumble] hit sample +%u speed=%d racing=%d\n",
+                             (unsigned)(collisions - state.collisions), speed,
+                             racing ? 1 : 0);
+            }
+            if (racing && enabled && supported) {
+                state.impulse = 1.0f;
+                state.reissue_at = 0;   // send the impact peak immediately
+            }
         }
         state.collisions = collisions;
     }
@@ -210,12 +215,8 @@ void update_rumble(SDL_GameController *pad, bool supported, const Settings &s,
         // to a corner. It cannot be driven by wiggling the stick while the
         // car is crashed or stationary.
         const uint8_t *rot = m.rotation;
-        auto read_be32 = [](const uint8_t *p) -> int32_t {
-            return (int32_t)(((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
-                             ((uint32_t)p[2] << 8) | (uint32_t)p[3]);
-        };
-        const int32_t dxx = read_be32(rot + 0x3F6 * 2);
-        const int32_t dxy = read_be32(rot + 0x3F8 * 2);
+        const int32_t dxx = (int32_t)read_be32(rot + 0x3F6 * 2);
+        const int32_t dxy = (int32_t)read_be32(rot + 0x3F8 * 2);
         yaw_deg = std::abs((float)std::atan2((double)dxy, (double)dxx)) *
                   57.2957795f;
         const float speed_f = std::clamp(speed / 240.0f, 0.0f, 1.0f);

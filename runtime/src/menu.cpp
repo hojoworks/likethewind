@@ -801,9 +801,9 @@ MenuResult Menu::key(MenuKey k) {
         if (settings_.audio_preset == 0) break;
         if (mixer_channels && sel_ >= 0 && sel_ < 24) {
             const int bit = sel_ < 8 ? sel_ : 8 + (sel_ - 8);
-            settings_.solo_mask ^= (1u << bit);
+            settings_.solo_mask ^= (1ull << bit);
         } else if (sfx_channels && sel_ >= 0 && sel_ < Settings::kSfxChannels) {
-            settings_.solo_mask ^= (1u << (24 + sel_));
+            settings_.solo_mask ^= (1ull << (24 + sel_));
         }
         break;
     case MenuKey::SendSelect:

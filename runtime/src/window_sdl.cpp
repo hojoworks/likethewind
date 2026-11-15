@@ -482,6 +482,7 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
     int applied_preset = settings.audio_preset;
     uint8_t sound_test_cmd = 0xFF;
     int last_game_mode = -1;
+    int note_mode = -1;
     double music_fade = 1.0;
     bool music_fade_active = false;
 
@@ -1158,7 +1159,6 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                     if (tour.race_start_frame >= 0) {
                         stage_frames =
                             (uint64_t)(machine.frame - tour.race_start_frame);
-                        tour.total_frames += stage_frames;
                         tour.race_start_frame = -1;
                     }
                     const int64_t hud_clock =
@@ -1351,7 +1351,6 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         if (menu_up) menu.draw(pixels.data(), machine.view_width, Machine::kVisibleLines);
         const int mode_now =
             (machine.shared[0xE09C] << 8) | machine.shared[0xE09D];
-        static int note_mode = -1;
         if (mode_now != note_mode) {
             crash_note("mode=%d tour phase=%d course=%d stage=%d "
                        "done=%d elapsed=%llu",

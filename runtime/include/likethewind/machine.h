@@ -58,9 +58,6 @@ public:
     void clear_nvram();
     void set_code(int cpu, const ng_func_entry_t *table, size_t count);
     void clear_code(int cpu) { std::fill(fn_[cpu].begin(), fn_[cpu].end(), nullptr); }
-    ng_func_t function_at(int cpu, uint32_t address) const {
-        return (address / 2 < fn_[cpu].size()) ? fn_[cpu][address / 2] : nullptr;
-    }
     void reset();
     void run_frame();
     void run_until(int cpu, int64_t target);

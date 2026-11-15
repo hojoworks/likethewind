@@ -32,7 +32,6 @@ struct SpecialTourState {
     bool results_hold = false;   // keep final totals up until a new game
     bool score_baseline_pending = true;
     int last_score_seen = 0;
-    uint64_t total_frames = 0;
     uint64_t total_hundredths = 0;
     uint64_t stage_start_hundredths = 0;
     int64_t total_score = 0;
@@ -45,14 +44,8 @@ struct SpecialTourState {
 };
 
 int player_place(const Machine &machine);
-int bcd_value(uint8_t value);
 uint64_t game_clock_hundredths(const Machine &machine);
 int game_score(const Machine &machine);
-
-// The HUD uses a table of pre-rendered two-character tiles. Resolve a tile
-// address back to its numeric pair so the tracker can follow the exact value
-// the HUD is showing, including any score bonus that is still pending display.
-int hud_pair_value(const Machine &machine, uint16_t tile, bool high_only);
 int64_t read_hud_time(const Machine &machine, const uint8_t *sprite_list);
 std::string format_tour_clock(uint64_t hundredths);
 

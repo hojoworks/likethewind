@@ -17,7 +17,6 @@ void SpecialTourState::reset() {
     race_started = false;
     race_finished = false;
     last_mode = -1;
-    total_frames = 0;
     total_hundredths = 0;
     stage_start_hundredths = 0;
     total_score = 0;
@@ -47,7 +46,7 @@ int player_place(const Machine &machine) {
     return machine.shared[off];
 }
 
-int bcd_value(uint8_t value) {
+static int bcd_value(uint8_t value) {
     return ((value >> 4) * 10) + (value & 0x0F);
 }
 
@@ -78,7 +77,10 @@ int game_score(const Machine &machine) {
     return (int)result;
 }
 
-int hud_pair_value(const Machine &machine, uint16_t tile, bool high_only) {
+// The HUD uses a table of pre-rendered two-character tiles. Resolve a tile
+// address back to its numeric pair so the tracker can follow the exact value
+// the HUD is showing, including any score bonus that is still pending display.
+static int hud_pair_value(const Machine &machine, uint16_t tile, bool high_only) {
     const uint8_t *rom = machine.suby_rom();
     if (!rom || !tile) return -1;
     const int count = high_only ? 10 : 100;

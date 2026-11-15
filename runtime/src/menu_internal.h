@@ -1,7 +1,6 @@
 #ifndef LIKETHEWIND_MENU_INTERNAL_H
 #define LIKETHEWIND_MENU_INTERNAL_H
 
-#include <cstdint>
 #include <cstdio>
 #include <string>
 

@@ -355,6 +355,8 @@ int main(int argc, char **argv) {
     }
 
     if (autoplay_cli) play = true;
+    // A zero/negative slice would make the scheduler spin without advancing.
+    slice = std::clamp(slice, 1, 4096);
 
     if (release_mode) {
         // Double-click launch: no command line. Use the exe's own folder,
@@ -513,6 +515,8 @@ int main(int argc, char **argv) {
             const size_t n = machine.audio()->sample_count();
             wav_samples.insert(wav_samples.end(), s, s + n);
         }
+        // Research probe: snapshot the 16B staging list around the first
+        // race start when --bsp-tap is enabled.
         if (likethewind::bsprite_tap && i >= 845 && i <= 900) {
             char name[64];
             std::snprintf(name, sizeof(name), "work/stg_%04d.bin", i);

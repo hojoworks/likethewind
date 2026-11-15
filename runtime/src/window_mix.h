@@ -33,7 +33,7 @@ struct MixParams {
     int reverb_damping = 40;
     int reverb_predelay = 0;
     int reverb_mix = 25;
-    uint32_t solo_mask = 0;
+    uint64_t solo_mask = 0;
 };
 
 MixParams stock_mix();

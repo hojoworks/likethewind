@@ -19,8 +19,6 @@ void mus_set_stopped(void);
 void mus_clear_stopped(void);
 }
 
-#include <cstdio>
-
 namespace likethewind {
 
 static bool g_musashi_ready = false;

@@ -51,8 +51,8 @@ $Build = Join-Path $Root 'build'
 $Obj = Join-Path $Build 'mixer_obj'
 New-Item -ItemType Directory -Force -Path $Build, $Obj | Out-Null
 
-$Inc = @('-Iruntime\include', '-Ivendor\ymfm', '-Ivendor\z80',
-         "-I$(Join-Path $Sdl 'include\SDL2')", '-DLIKETHEWIND_HAVE_SDL')
+$Inc = @('-I', 'runtime\include', '-I', 'vendor\ymfm', '-I', 'vendor\z80',
+         '-I', (Join-Path $Sdl 'include\SDL2'), '-DLIKETHEWIND_HAVE_SDL')
 $Cpp = @('-std=c++20', '-O2') + $Inc
 
 $Objects = @()

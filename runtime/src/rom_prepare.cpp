@@ -295,10 +295,6 @@ std::string zip_stamp(const fs::path &zip) {
            "\n";
 }
 
-bool prepared_files_valid(const fs::path &dir) {
-    return flat_files_valid(dir);
-}
-
 bool prepared_valid(const fs::path &dir, const std::string &stamp) {
     std::error_code ec;
     const fs::path marker = dir / "stamp.txt";
@@ -307,7 +303,7 @@ bool prepared_valid(const fs::path &dir, const std::string &stamp) {
     if (!in) return false;
     std::string got((std::istreambuf_iterator<char>(in)),
                     std::istreambuf_iterator<char>());
-    return got == stamp && prepared_files_valid(dir);
+    return got == stamp && flat_files_valid(dir);
 }
 
 fs::path find_zip(const fs::path &roms) {
@@ -462,7 +458,7 @@ RomPrepareResult prepare_release_roms(const std::string &exe_dir) {
         return result;
     }
 
-    if (prepared_files_valid(prepared)) {
+    if (flat_files_valid(prepared)) {
         result.ok = true;
         result.rom_dir = prepared.string();
         return result;

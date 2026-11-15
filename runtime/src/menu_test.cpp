@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -19,7 +20,9 @@ using namespace likethewind;
 static const PadState kNoPad;
 
 int inputtest() {
-    Machine machine;
+    // Machine is ~1.3 MB; keep it off the default Windows stack.
+    auto machine_owner = std::make_unique<Machine>();
+    Machine &machine = *machine_owner;
     Settings settings;
     bool gear = false, prev_gear = false;
 
@@ -41,7 +44,8 @@ int inputtest() {
     const bool course_detent = course_step(0x90, SDL_SCANCODE_LEFT) == 0x60 &&
                                course_step(0x90, SDL_SCANCODE_RIGHT) == 0xA0;
 
-    Machine entry_machine;
+    auto entry_owner = std::make_unique<Machine>();
+    Machine &entry_machine = *entry_owner;
     SteeringState entry_state;
     Uint8 keys[SDL_NUM_SCANCODES] = {};
     entry_machine.shared[0xE09C] = 0;
@@ -455,7 +459,8 @@ int menutest() {
         if (!clear_ok) ++failures;
     }
     {
-        Machine course_machine;
+        auto course_owner = std::make_unique<Machine>();
+        Machine &course_machine = *course_owner;
         Settings course_settings;
         SteeringState course_state;
         Uint8 keys[SDL_NUM_SCANCODES] = {};
@@ -505,7 +510,8 @@ int menutest() {
                             one_step_right && no_wheel_nudge;
     }
     {
-        Machine entry_machine;
+        auto entry_owner = std::make_unique<Machine>();
+        Machine &entry_machine = *entry_owner;
         Settings entry_settings;
         SteeringState entry_state;
         Uint8 keys[SDL_NUM_SCANCODES] = {};
@@ -569,7 +575,7 @@ int menutest() {
     reset_settings.chorus_delay = 25;
     reset_settings.chorus_feedback = 60;
     reset_settings.chorus_mix = 80;
-    reset_settings.solo_mask = (1u << 0) | (1u << (8 + 3));
+    reset_settings.solo_mask = (1ull << 0) | (1ull << (8 + 3));
     reset_menu.key(MenuKey::TabPrev);   // INPUT -> SYSTEM
     reset_menu.key(MenuKey::TabPrev);   // SYSTEM -> MIXER
     reset_menu.key(MenuKey::Enter);     // unlock mixer
@@ -643,12 +649,29 @@ int menutest() {
     solo_menu.key(MenuKey::Right);     // YM2
     solo_menu.key(MenuKey::Solo);      // add YM2
     const bool solo_multi =
-        solo_settings.solo_mask == ((1u << 0) | (1u << 1));
+        solo_settings.solo_mask == ((1ull << 0) | (1ull << 1));
     solo_menu.key(MenuKey::Solo);      // remove YM2 only
-    const bool solo_manual = solo_settings.solo_mask == (1u << 0);
+    const bool solo_manual = solo_settings.solo_mask == (1ull << 0);
     std::printf("menutest: multi solo %s\n",
                 (solo_multi && solo_manual) ? "PASS" : "FAIL");
     if (!(solo_multi && solo_manual)) ++failures;
+
+    // SFX solo uses bits 24-41; exercise the upper half of the 64-bit mask.
+    Settings sfx_solo_settings;
+    Menu sfx_solo_menu(sfx_solo_settings);
+    sfx_solo_menu.toggle();
+    sfx_solo_menu.key(MenuKey::TabPrev);   // INPUT -> SYSTEM
+    sfx_solo_menu.key(MenuKey::TabPrev);   // SYSTEM -> MIXER
+    sfx_solo_menu.key(MenuKey::Enter);     // unlock mixer
+    sfx_solo_menu.set_selection(28);       // SFX button
+    sfx_solo_menu.key(MenuKey::Enter);
+    sfx_solo_menu.set_selection(17);       // SFX18
+    sfx_solo_menu.key(MenuKey::Solo);
+    const bool sfx_solo_ok =
+        sfx_solo_settings.solo_mask == (1ull << (24 + 17));
+    std::printf("menutest: SFX solo 64-bit mask %s\n",
+                sfx_solo_ok ? "PASS" : "FAIL");
+    if (!sfx_solo_ok) ++failures;
 
     // A/B monitor switch and the plate-reverb submenu.
     Settings fx_settings;

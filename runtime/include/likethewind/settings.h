@@ -38,6 +38,8 @@ struct Settings {
     static constexpr int kChannelMax = 400;   // per-channel mixer headroom
     static constexpr int kBusMax = 200;       // master/music/SFX/engine boost
     static constexpr int kSfxChannels = 18;   // 16 SFX strips + announcer/passing
+    static_assert(24 + kSfxChannels <= 64,
+                  "solo_mask must hold every YM, PCM and SFX channel");
 
     // DIP switches (1 = off in the raw port value; the menu stores the decoded
     // option number instead).
@@ -110,8 +112,9 @@ struct Settings {
     // Monitor-only A/B switch; not part of a saved mix.
     bool ab_original = false;
 
-    // Temporary mixer solo (not persisted): bits 0-7 YM 1-8, bits 8-23 PCM 1-16.
-    uint32_t solo_mask = 0;
+    // Temporary mixer solo (not persisted): bits 0-7 YM 1-8, bits 8-23
+    // PCM 1-16, bits 24-41 SFX 1-18.
+    uint64_t solo_mask = 0;
 
     // System
     bool run_in_menu = true;    // keep the game running behind the menu
