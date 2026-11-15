@@ -138,6 +138,11 @@ public:
         gas_value_ = gas;
         brake_value_ = brake;
     }
+    void set_output_levels(float left, float right, bool clipped) {
+        output_left_ = left;
+        output_right_ = right;
+        output_clipped_ = clipped;
+    }
 
     // Controller binding capture: the host feeds the next input here.
     int binding_action() const { return binding_; }
@@ -171,6 +176,9 @@ private:
     void draw_steering(uint32_t *pixels, int width, int height, int px0, int py0) const;
     void draw_pedals(uint32_t *pixels, int width, int height, int px0, int py0) const;
     void draw_sfx(uint32_t *pixels, int width, int height, int px0, int py0) const;
+    void draw_bass(uint32_t *pixels, int width, int height, int px0, int py0) const;
+    void draw_stereo_meter(uint32_t *pixels, int width, int height,
+                           int px0, int py0) const;
 
     Settings &settings_;
     bool open_ = false;
@@ -187,6 +195,9 @@ private:
     int wheel_ = 0x80;     // live steering value, 0x20..0xE0
     int gas_value_ = 0;    // live pedal values, 0..255
     int brake_value_ = 0;
+    float output_left_ = 0.0f;
+    float output_right_ = 0.0f;
+    bool output_clipped_ = false;
     int send_focus_ = 0;   // 0 chorus send, 1 reverb send
     float ym_level_[8] = {};
     float pcm_level_[16] = {};

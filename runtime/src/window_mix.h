@@ -33,6 +33,9 @@ struct MixParams {
     int reverb_damping = 40;
     int reverb_predelay = 0;
     int reverb_mix = 25;
+    bool bass_boost = false;
+    int bass_boost_intensity = 50;
+    int bass_boost_frequency = 80;
     uint64_t solo_mask = 0;
 };
 

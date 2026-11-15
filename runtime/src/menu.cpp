@@ -325,6 +325,7 @@ std::vector<Menu::Item> Menu::items() const {
                            Kind::Action, 33});
             out.push_back({"RESET", "", Kind::Action, 30});
             out.push_back({"SFX", "", Kind::Action, 35});
+            out.push_back({"BASS", "", Kind::Action, 37});
         } else if (mixer_page_ == 3) {
             const bool stock = settings_.audio_preset == 0;
             for (int i = 0; i < Settings::kSfxChannels; ++i)
@@ -343,6 +344,17 @@ std::vector<Menu::Item> Menu::items() const {
                            Kind::Value, 28});
             out.push_back({"RETURN", fmt("%d%%", settings_.chorus_mix), Kind::Value, 29});
             out.push_back({"BACK", "", Kind::Action, 32});
+        } else if (mixer_page_ == 4) {
+            out.push_back({"BASS BOOST",
+                           kOnOff[settings_.bass_boost ? 1 : 0],
+                           Kind::Value, 50});
+            out.push_back({"INTENSITY",
+                           fmt("%d%%", settings_.bass_boost_intensity),
+                           Kind::Value, 51});
+            out.push_back({"FREQUENCY",
+                           fmt("%d HZ", settings_.bass_boost_frequency),
+                           Kind::Value, 52});
+            out.push_back({"BACK", "", Kind::Action, 36});
         } else {
             out.push_back({"REVERB", kOnOff[settings_.reverb_enabled ? 1 : 0],
                            Kind::Value, 40});
@@ -489,6 +501,16 @@ void Menu::change(int delta) {
                            0, Settings::kChannelMax);
             break;
         }
+        if (it.id >= 50 && it.id <= 52) {
+            if (it.id == 50) settings_.bass_boost = delta > 0;
+            else if (it.id == 51)
+                settings_.bass_boost_intensity =
+                    std::clamp(settings_.bass_boost_intensity + delta * 5, 0, 100);
+            else
+                settings_.bass_boost_frequency =
+                    std::clamp(settings_.bass_boost_frequency + delta * 5, 40, 160);
+            break;
+        }
         if (it.id >= 40) {
             const int c = it.id - 40;
             if (c == 0) settings_.reverb_enabled = delta > 0;
@@ -554,6 +576,7 @@ void Menu::activate() {
                         (tab_ == 3 && (it.id == 7 || it.id == 8)) ||
                         (tab_ == 4 && mixer_page_ == 1 && it.id == 24) ||
                         (tab_ == 4 && mixer_page_ == 2 && it.id == 40) ||
+                        (tab_ == 4 && mixer_page_ == 4 && it.id == 50) ||
                         (tab_ == 5 &&
                          (it.id == 3 || it.id == 4 || it.id == 5 || it.id == 7));
     if (toggle) {
@@ -584,6 +607,8 @@ void Menu::activate() {
             settings_.chorus_enabled = !settings_.chorus_enabled;
         else if (tab_ == 4 && it.id == 40)
             settings_.reverb_enabled = !settings_.reverb_enabled;
+        else if (tab_ == 4 && it.id == 50)
+            settings_.bass_boost = !settings_.bass_boost;
     } else {
         change(+1);
     }
@@ -707,6 +732,9 @@ MenuResult Menu::key(MenuKey k) {
                 sel_ = 0;
             } else if (id == 36) {
                 mixer_page_ = 0;
+                sel_ = 0;
+            } else if (id == 37) {
+                mixer_page_ = 4;
                 sel_ = 0;
             } else if (id == 16 && tab_ == 0) {
                 r.rumble_test = true;

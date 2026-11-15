@@ -109,6 +109,11 @@ struct Settings {
     int reverb_predelay = 0;    // milliseconds, 0..50
     int reverb_mix = 25;        // 0..100
 
+    // RBASS-style bass harmonic enhancer on the custom mix.
+    bool bass_boost = false;
+    int bass_boost_intensity = 50;  // 0..100
+    int bass_boost_frequency = 80;  // low-pass focus, Hz, 40..160
+
     // Monitor-only A/B switch; not part of a saved mix.
     bool ab_original = false;
 

@@ -462,7 +462,8 @@ int main(int argc, char **argv) {
         if (verbose) settings.show_fps = true;
         machine.dip_a = settings.dip_a();
         machine.dip_b = settings.dip_b();
-        likethewind::run_window(machine, settings, frames, true, start_menu);
+        likethewind::run_window(machine, settings, frames, true, start_menu,
+                                autoStart);
         report_coverage(machine, coverage_file, verbose);
         return 0;
     }

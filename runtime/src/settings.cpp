@@ -92,6 +92,8 @@ void Settings::clamp() {
     reverb_damping = std::clamp(reverb_damping, 0, 100);
     reverb_predelay = std::clamp(reverb_predelay, 0, 50);
     reverb_mix = std::clamp(reverb_mix, 0, 100);
+    bass_boost_intensity = std::clamp(bass_boost_intensity, 0, 100);
+    bass_boost_frequency = std::clamp(bass_boost_frequency, 40, 160);
     aspect = std::clamp(aspect, 0, 5);
     tour_start_course = std::clamp(tour_start_course, 0, 4);
     steer_deadzone = std::clamp(steer_deadzone, 0, 40);
@@ -167,6 +169,9 @@ void copy_music_mix(Settings &dst, const Settings &src) {
     dst.reverb_damping = src.reverb_damping;
     dst.reverb_predelay = src.reverb_predelay;
     dst.reverb_mix = src.reverb_mix;
+    dst.bass_boost = src.bass_boost;
+    dst.bass_boost_intensity = src.bass_boost_intensity;
+    dst.bass_boost_frequency = src.bass_boost_frequency;
     dst.solo_mask = src.solo_mask;
 }
 
@@ -291,6 +296,9 @@ bool Settings::load(const std::string &path) {
         else if (key == "reverb_damping") reverb_damping = n;
         else if (key == "reverb_predelay") reverb_predelay = n;
         else if (key == "reverb_mix") reverb_mix = n;
+        else if (key == "bass_boost") bass_boost = n != 0;
+        else if (key == "bass_boost_intensity") bass_boost_intensity = n;
+        else if (key == "bass_boost_frequency") bass_boost_frequency = n;
         else if (key == "run_in_menu") run_in_menu = n != 0;
         else if (key == "save_score") save_score = n != 0;
         else if (key == "restore_female_voices") restore_female_voices = n != 0;
@@ -398,6 +406,9 @@ void Settings::save(const std::string &path) const {
       << "reverb_damping=" << reverb_damping << "\n"
       << "reverb_predelay=" << reverb_predelay << "\n"
       << "reverb_mix=" << reverb_mix << "\n"
+      << "bass_boost=" << (bass_boost ? 1 : 0) << "\n"
+      << "bass_boost_intensity=" << bass_boost_intensity << "\n"
+      << "bass_boost_frequency=" << bass_boost_frequency << "\n"
       << "run_in_menu=" << (run_in_menu ? 1 : 0) << "\n"
       << "save_score=" << (save_score ? 1 : 0) << "\n"
       << "restore_female_voices=" << (restore_female_voices ? 1 : 0) << "\n"
@@ -459,6 +470,9 @@ bool Settings::load_mix(const std::string &path) {
     reverb_damping = tmp.reverb_damping;
     reverb_predelay = tmp.reverb_predelay;
     reverb_mix = tmp.reverb_mix;
+    bass_boost = tmp.bass_boost;
+    bass_boost_intensity = tmp.bass_boost_intensity;
+    bass_boost_frequency = tmp.bass_boost_frequency;
     solo_mask = 0;
     clamp();
     return true;
@@ -487,7 +501,10 @@ void Settings::save_mix(const std::string &path) const {
       << "reverb_decay=" << reverb_decay << "\n"
       << "reverb_damping=" << reverb_damping << "\n"
       << "reverb_predelay=" << reverb_predelay << "\n"
-      << "reverb_mix=" << reverb_mix << "\n";
+      << "reverb_mix=" << reverb_mix << "\n"
+      << "bass_boost=" << (bass_boost ? 1 : 0) << "\n"
+      << "bass_boost_intensity=" << bass_boost_intensity << "\n"
+      << "bass_boost_frequency=" << bass_boost_frequency << "\n";
 }
 
 } // namespace likethewind

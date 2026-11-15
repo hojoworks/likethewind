@@ -49,7 +49,7 @@ constexpr int kScoreRestoreFrame = 120;
 } // namespace
 
 bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_settings,
-                bool open_menu) {
+                bool open_menu, bool auto_start) {
     settings.clamp();
     machine.load_nvram(kNvramPath);
     machine.load_scores(kScorePath);
@@ -377,6 +377,7 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
     int preview_wheel = 0x80;
     SteeringState preview_state;
     int autoplay_frame = 0;
+    int auto_start_frame = 0;
     bool autoplay_was = false;
     int prevMode = -1;
     SpecialTourState tour;
@@ -384,6 +385,18 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
     tour.reset();
     int tour_start_was = settings.tour_start_course;
     bool tour_was_enabled = settings.special_tour;
+    const bool tour_debug = std::getenv("LIKETHEWIND_TOUR_DEBUG") != nullptr;
+    int last_tour_log_mode = -1;
+    bool last_tour_log_started = false;
+    if (tour_debug) {
+        std::error_code cwd_error;
+        const std::string cwd =
+            std::filesystem::current_path(cwd_error).string();
+        std::fprintf(stderr,
+                     "[tour] startup special_tour=%d start_course=%d cwd=%s\n",
+                     settings.special_tour ? 1 : 0,
+                     settings.tour_start_course, cwd.c_str());
+    }
     auto force_tour_course = [&](bool with_stage) {
         int course = std::clamp(tour.course, 0, 4);
         int stage = std::clamp(tour.stage, 0, 4);
@@ -959,6 +972,34 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         while (!paused && accumulator >= frame_time && running) {
             apply_input(machine, keys, pad_state, gear, prevGear, steer_state,
                         settings, menu.visible());
+            if (!settings.autoplay && auto_start) {
+                // --auto-start in windowed play: same deterministic coin and
+                // start sequence as the headless smoke test. It only drives
+                // the attract/course-select screens; once the race starts the
+                // player controls the car.
+                ++auto_start_frame;
+                const int mode = (machine.shared[0xE09C] << 8) |
+                                 machine.shared[0xE09D];
+                if (mode <= 8) {
+                    uint8_t g = 0xDF;
+                    if (auto_start_frame >= 60 && auto_start_frame < 64)
+                        g &= (uint8_t)~0x40;
+                    if (auto_start_frame >= 90 && auto_start_frame < 94)
+                        g &= (uint8_t)~0x08;
+                    if (auto_start_frame >= 300 && auto_start_frame < 304)
+                        g &= (uint8_t)~0x08;
+                    if (auto_start_frame >= 600 && auto_start_frame < 604)
+                        g &= (uint8_t)~0x08;
+                    if (auto_start_frame == 90 || auto_start_frame == 300 ||
+                        auto_start_frame == 600)
+                        machine.player_start_seen = true;
+                    machine.in_general = g;
+                    machine.in_wheel = 0x80;
+                    machine.in_gas = 0;
+                } else if (auto_start_frame >= 700) {
+                    machine.in_gas = 0xFF;
+                }
+            }
             if (settings.autoplay) {
                 if (!autoplay_was) autoplay_frame = 0;
                 ++autoplay_frame;
@@ -1108,6 +1149,17 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                     tour.reset();
                 }
 
+                // The tracker is visible on course select before the credit
+                // starts. Follow the highlighted course so the strip shows the
+                // order the player is about to race.
+                if (mode_after == 8 && !tour.started) {
+                    const int selected_course =
+                        (machine.shared[0xEA2A] << 8) | machine.shared[0xEA2B];
+                    if (selected_course >= 0 &&
+                        selected_course < SpecialTourState::kCourses)
+                        tour.start_course = selected_course;
+                }
+
                 // The first course choice happens on the normal course-select
                 // screen. Once the player starts it and enters the garage,
                 // capture that course as the tour origin.
@@ -1212,6 +1264,21 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                     }
                 }
                 tour.last_mode = mode_after;
+                if (tour_debug &&
+                    (mode_after != last_tour_log_mode ||
+                     tour.started != last_tour_log_started)) {
+                    std::fprintf(
+                        stderr,
+                        "[tour] frame=%lld mode=%d player_start=%d started=%d "
+                        "phase=%d course=%d stage=%d done=%d results=%d\n",
+                        (long long)machine.frame, mode_after,
+                        machine.player_start_seen ? 1 : 0,
+                        tour.started ? 1 : 0, tour.phase, tour.course,
+                        tour.stage, tour.courses_done,
+                        tour.results_hold ? 1 : 0);
+                    last_tour_log_mode = mode_after;
+                    last_tour_log_started = tour.started;
+                }
             }
 
             accumulator -= frame_time;
@@ -1257,12 +1324,17 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             float ym_levels[8] = {};
             float pcm_levels[16] = {};
             float sfx_levels[Settings::kSfxChannels] = {};
+            float output_l = 0.0f, output_r = 0.0f;
+            bool output_clip = false;
             if ((!paused || menu.sound_test()) && machine.audio()) {
                 machine.audio()->get_levels(ym_levels, pcm_levels);
                 machine.audio()->get_sfx_levels(sfx_levels);
+                machine.audio()->get_output_levels(&output_l, &output_r);
+                output_clip = machine.audio()->output_clipped();
             }
             menu.set_levels(ym_levels, pcm_levels);
             menu.set_sfx_levels(sfx_levels);
+            menu.set_output_levels(output_l, output_r, output_clip);
         }
 
         // One present per iteration, paced to the selected presentation rate.
@@ -1367,8 +1439,10 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                        (unsigned long long)tour.total_hundredths);
             note_mode = mode_now;
         }
-        if (!menu_up && settings.special_tour && tour.started &&
-            tour.tracker_ready &&
+        const bool tour_hud_ready =
+            settings.special_tour &&
+            (tour.started ? tour.tracker_ready : mode_now == 8);
+        if (!menu_up && tour_hud_ready &&
             ((mode_now >= 8 && mode_now <= 25) || tour.results_hold)) {
             uint64_t current_hundredths = 0;
             uint64_t total_hundredths = tour.total_hundredths;
@@ -1408,8 +1482,9 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                                    tour.special_places, tour.start_course,
                                    stats_line);
         }
-        if (!menu_up && settings.special_tour && tour.started &&
-            mode_now >= 8 && mode_now < 20 &&
+        if (!menu_up && settings.special_tour &&
+            ((tour.started && mode_now >= 8 && mode_now < 20) ||
+             (!tour.started && mode_now == 8)) &&
             (machine.frame / 30) % 2 == 0) {
             menu.draw_tour_notice(pixels.data(), machine.view_width,
                                   Machine::kVisibleLines,
@@ -1495,7 +1570,7 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
 
 #else
 
-bool run_window(Machine &, Settings &, int, bool, bool) {
+bool run_window(Machine &, Settings &, int, bool, bool, bool) {
     std::fprintf(stderr, "this build has no SDL2 window; rebuild with vendor/SDL2 present\n");
     return false;
 }

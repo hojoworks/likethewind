@@ -36,10 +36,15 @@ public:
                     int delay_ms, int feedback_percent, int mix_percent);
     void set_reverb(bool enabled, int decay_percent, int damping_percent,
                     int predelay_ms, int mix_percent);
+    // RBASS-style bass harmonic enhancer on the final dry mix.
+    void set_bass_boost(bool enabled, int intensity_percent, int frequency_hz);
 
     // Current post-trim activity for the channel mixer's VU meters.
     void get_levels(float *ym_levels, float *pcm_levels) const;
     void get_sfx_levels(float *levels) const;
+    // Smoothed stereo mix level (post-trim/effects, before master volume).
+    void get_output_levels(float *left, float *right) const;
+    bool output_clipped() const;
 
     // Monotonic count of wall/enemy hit samples started. The host uses the
     // delta to fire force-feedback impulses on collisions.

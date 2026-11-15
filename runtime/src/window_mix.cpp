@@ -42,6 +42,9 @@ MixParams custom_mix(const Settings &s) {
     p.reverb_damping = s.reverb_damping;
     p.reverb_predelay = s.reverb_predelay;
     p.reverb_mix = s.reverb_mix;
+    p.bass_boost = s.bass_boost;
+    p.bass_boost_intensity = s.bass_boost_intensity;
+    p.bass_boost_frequency = s.bass_boost_frequency;
     p.solo_mask = s.solo_mask;
     return p;
 }
@@ -57,6 +60,8 @@ void apply_mix(Audio *audio, const MixParams &p) {
                       p.chorus_feedback, p.chorus_mix);
     audio->set_reverb(p.reverb_enabled, p.reverb_decay, p.reverb_damping,
                       p.reverb_predelay, p.reverb_mix);
+    audio->set_bass_boost(p.bass_boost, p.bass_boost_intensity,
+                          p.bass_boost_frequency);
 }
 
 } // namespace likethewind

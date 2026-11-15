@@ -34,6 +34,9 @@ constexpr float kVoiceHighPassHz = 175.0f;
 constexpr float kAnnouncerHighPassHz = 250.0f;
 constexpr float kAnnouncerPostGainDb = -1.0f;
 constexpr float kFemalePostGainDb = -1.25f;
+// Nudge the restored female passing lines down relative to the other female
+// reactions so they sit back in the mix.
+constexpr float kFemalePassingPostGainDb = -0.75f;
 // The second announcer line after course selection ("Do your best and good
 // luck") sits a little too far forward over the music.
 constexpr float kCourseSelectAnnouncerPostGainDb = -1.5f;
@@ -601,6 +604,23 @@ struct Audio::Impl {
     int pcm_reverb_send[16] = {};
     PlateReverb reverb;
 
+    // RBASS-style bass harmonic enhancer. A two-pole low-pass isolates the
+    // bass, then soft saturation generates harmonics that survive small
+    // speakers; the wet signal is the difference from the clean low band.
+    bool bass_enabled = false;
+    int bass_intensity = 50;
+    int bass_frequency = 0;   // forces the first coefficient update
+    float bass_coeff = 0.0f;
+    float bass_drive = 1.0f;
+    float bass_wet = 0.0f;
+    float bass_lp1[2] = {};
+    float bass_lp2[2] = {};
+
+    // Stereo mix meter, post-trim and post-effects, before master volume.
+    float output_level[2] = {};
+    float output_frame_peak[2] = {};
+    bool output_clip = false;
+
     // Resampler state, kept between frames.
     double pcm_phase = 0.0;
     int32_t pcm_prev_l = 0, pcm_prev_r = 0;
@@ -739,6 +759,8 @@ struct Audio::Impl {
             g_sample_gender[sample] == 4 && g_sample_event[sample] == 1;
         const bool male_passing =
             g_sample_gender[sample] == 1 && g_sample_event[sample] == 1;
+        const bool female_passing =
+            g_sample_gender[sample] == 2 && g_sample_event[sample] == 1;
         float gain_db = male_passing ? 0.0f
                               : enemy_passing ? 1.0f
                               : g_sample_gender[sample] == 1
@@ -748,6 +770,7 @@ struct Audio::Impl {
                               : g_sample_gender[sample] == 3
                                   ? 2.0f + kAnnouncerPostGainDb
                                   : 2.0f;
+        if (female_passing) gain_db += kFemalePassingPostGainDb;
         if (sample == kCourseSelectAnnouncerSample)
             gain_db += kCourseSelectAnnouncerPostGainDb;
         v.voice_gain = v.voice_effect
@@ -1183,6 +1206,8 @@ struct Audio::Impl {
         std::fill(std::begin(ym_frame_peak), std::end(ym_frame_peak), 0.0f);
         std::fill(std::begin(pcm_frame_peak), std::end(pcm_frame_peak), 0.0f);
         std::fill(std::begin(sfx_frame_peak), std::end(sfx_frame_peak), 0.0f);
+        output_frame_peak[0] = output_frame_peak[1] = 0.0f;
+        output_clip = false;
         const uint64_t start = cpu.cyc;
         auto run_z80_to = [&](uint64_t target) {
             // Never let a corrupt/overflowed target turn one sample into a
@@ -1283,12 +1308,36 @@ struct Audio::Impl {
             float rev_l = 0.0f, rev_r = 0.0f;
             reverb.process(rev_send_l, rev_send_r, rev_l, rev_r);
             const float rev_ret = static_cast<float>(reverb_mix) / 100.0f;
-            const int16_t l = clamp16((int32_t)std::lround(dry_l + wet_l * ret +
-                                                          rev_l * rev_ret));
-            const int16_t r = clamp16((int32_t)std::lround(dry_r + wet_r * ret +
-                                                          rev_r * rev_ret));
-            out[(size_t)i * 2 + 0] = l;
-            out[(size_t)i * 2 + 1] = r;
+
+            float mix_l = static_cast<float>(dry_l);
+            float mix_r = static_cast<float>(dry_r);
+            if (bass_enabled && bass_wet > 0.0f) {
+                const auto bass_band = [&](float x, float &lp1, float &lp2) {
+                    lp1 += bass_coeff * (x - lp1);
+                    lp2 += bass_coeff * (lp1 - lp2);
+                    const float low = lp2;
+                    const float shaped =
+                        std::tanh(low * (1.0f / 32768.0f) * bass_drive) *
+                        32768.0f;
+                    return (shaped - low) * bass_wet;
+                };
+                mix_l += bass_band(mix_l, bass_lp1[0], bass_lp2[0]);
+                mix_r += bass_band(mix_r, bass_lp1[1], bass_lp2[1]);
+            }
+
+            const int32_t pre_l =
+                (int32_t)std::lround(mix_l + wet_l * ret + rev_l * rev_ret);
+            const int32_t pre_r =
+                (int32_t)std::lround(mix_r + wet_r * ret + rev_r * rev_ret);
+            output_frame_peak[0] =
+                std::max(output_frame_peak[0],
+                         std::abs(static_cast<float>(pre_l)) / 32768.0f);
+            output_frame_peak[1] =
+                std::max(output_frame_peak[1],
+                         std::abs(static_cast<float>(pre_r)) / 32768.0f);
+            output_clip = output_clip || pre_l > 32767 || pre_l < -32768;
+            out[(size_t)i * 2 + 0] = clamp16(pre_l);
+            out[(size_t)i * 2 + 1] = clamp16(pre_r);
         }
 
         for (int ch = 0; ch < 8; ++ch)
@@ -1297,6 +1346,9 @@ struct Audio::Impl {
             pcm_level[v] = std::max(pcm_frame_peak[v], pcm_level[v] * 0.82f);
         for (int v = 0; v < kSfxChannelCount; ++v)
             sfx_level[v] = std::max(sfx_frame_peak[v], sfx_level[v] * 0.82f);
+        for (int ch = 0; ch < 2; ++ch)
+            output_level[ch] =
+                std::max(output_frame_peak[ch], output_level[ch] * 0.82f);
     }
 };
 
@@ -1369,6 +1421,18 @@ void Audio::reset(const std::vector<uint8_t> &z80_rom,
     impl_->chorus_phase = 0.0;
     std::fill(impl_->chorus_buf[0].begin(), impl_->chorus_buf[0].end(), 0.0f);
     std::fill(impl_->chorus_buf[1].begin(), impl_->chorus_buf[1].end(), 0.0f);
+
+    impl_->bass_enabled = false;
+    impl_->bass_intensity = 50;
+    impl_->bass_frequency = 0;
+    impl_->bass_coeff = 0.0f;
+    impl_->bass_drive = 1.0f;
+    impl_->bass_wet = 0.0f;
+    impl_->bass_lp1[0] = impl_->bass_lp1[1] = 0.0f;
+    impl_->bass_lp2[0] = impl_->bass_lp2[1] = 0.0f;
+    impl_->output_level[0] = impl_->output_level[1] = 0.0f;
+    impl_->output_frame_peak[0] = impl_->output_frame_peak[1] = 0.0f;
+    impl_->output_clip = false;
 }
 
 void Audio::sound_latch(uint8_t value) {
@@ -1444,6 +1508,27 @@ void Audio::set_chorus(bool enabled, int rate_tenths, int depth_percent,
     impl_->chorus_mix = std::clamp(mix_percent, 0, 100);
 }
 
+void Audio::set_bass_boost(bool enabled, int intensity_percent,
+                           int frequency_hz) {
+    const int frequency = std::clamp(frequency_hz, 40, 160);
+    if (frequency != impl_->bass_frequency) {
+        impl_->bass_frequency = frequency;
+        impl_->bass_coeff =
+            1.0f - std::exp(-6.28318530718f * static_cast<float>(frequency) /
+                            static_cast<float>(kOutRate));
+    }
+    impl_->bass_intensity = std::clamp(intensity_percent, 0, 100);
+    impl_->bass_drive =
+        1.0f + static_cast<float>(impl_->bass_intensity) / 20.0f;
+    impl_->bass_wet =
+        (static_cast<float>(impl_->bass_intensity) / 100.0f) * 0.7f;
+    if (!enabled) {
+        impl_->bass_lp1[0] = impl_->bass_lp1[1] = 0.0f;
+        impl_->bass_lp2[0] = impl_->bass_lp2[1] = 0.0f;
+    }
+    impl_->bass_enabled = enabled;
+}
+
 void Audio::set_reverb_sends(const int *ym_percent, const int *pcm_percent) {
     if (ym_percent)
         for (int i = 0; i < 8; ++i)
@@ -1484,6 +1569,15 @@ void Audio::get_sfx_levels(float *levels) const {
     if (levels)
         for (int i = 0; i < kSfxChannelCount; ++i)
             levels[i] = impl_ ? std::clamp(impl_->sfx_level[i], 0.0f, 1.0f) : 0.0f;
+}
+
+void Audio::get_output_levels(float *left, float *right) const {
+    if (left) *left = impl_ ? std::clamp(impl_->output_level[0], 0.0f, 1.0f) : 0.0f;
+    if (right) *right = impl_ ? std::clamp(impl_->output_level[1], 0.0f, 1.0f) : 0.0f;
+}
+
+bool Audio::output_clipped() const {
+    return impl_ && impl_->output_clip;
 }
 
 uint32_t Audio::collision_events() const {

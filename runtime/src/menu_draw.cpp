@@ -529,6 +529,9 @@ void Menu::draw_mixer(uint32_t *pixels, int width, int height, int px0, int py0)
     } else if (sel_ == 28) {
         status = tag + "SFX CHANNELS";
         status_color = hot;
+    } else if (sel_ == 29) {
+        status = tag + "BASS ENHANCER";
+        status_color = hot;
     }
     draw_small_text(pixels, width, height, px0 + 12, py0 + 44, status, status_color);
 
@@ -597,9 +600,9 @@ void Menu::draw_mixer(uint32_t *pixels, int width, int height, int px0, int py0)
     // CHORUS / REVERB open effect submenus; A/B compares the raw board mix
     // against the current mix; RESET restores the whole song.
     const int pw = std::min(304, width - 8);
-    const int btn_w = 52;
-    const int gap = 5;
-    const int bx = px0 + (pw - (btn_w * 5 + gap * 4)) / 2;
+    const int btn_w = 43;
+    const int gap = 4;
+    const int bx = px0 + (pw - (btn_w * 6 + gap * 5)) / 2;
     const int by = py0 + 170;
     draw_button(pixels, width, height, bx, by, btn_w, "CHORUS", sel_ == 24, hot, dim);
     draw_button(pixels, width, height, bx + btn_w + gap, by, btn_w, "REVERB",
@@ -610,6 +613,8 @@ void Menu::draw_mixer(uint32_t *pixels, int width, int height, int px0, int py0)
                 sel_ == 27, hot, dim);
     draw_button(pixels, width, height, bx + 4 * (btn_w + gap), by, btn_w, "SFX",
                 sel_ == 28, hot, dim);
+    draw_button(pixels, width, height, bx + 5 * (btn_w + gap), by, btn_w, "BASS",
+                sel_ == 29, hot, dim);
 }
 
 void Menu::draw_sfx(uint32_t *pixels, int width, int height, int px0,
@@ -780,6 +785,82 @@ void Menu::draw_reverb(uint32_t *pixels, int width, int height, int px0,
 
     draw_button(pixels, width, height, px0 + (pw - 120) / 2, py0 + 170, 120, "BACK",
                 sel_ == 5, hot, dim);
+}
+
+void Menu::draw_bass(uint32_t *pixels, int width, int height, int px0,
+                     int py0) const {
+    const uint32_t dim = 0xFF8896AA;
+    const uint32_t hot = 0xFFFFD040;
+    const uint32_t cyan = 0xFF6FD3FF;
+    const char *const labels[3] = {"BASS BOOST", "INTENSITY", "FREQUENCY"};
+
+    draw_small_text(pixels, width, height, px0 + 12, py0 + 44,
+                    "BASS ENHANCER", hot);
+
+    const int pw = std::min(304, width - 8);
+    const int label_x = px0 + 16;
+    const int bar_x = px0 + 112;
+    const int bar_w = 108;
+    const int value_x = px0 + pw - 16;
+    const int row_y = py0 + 60;
+    const int row_h = 16;
+
+    for (int c = 0; c < 3; ++c) {
+        const int y = row_y + c * row_h;
+        const bool active = (sel_ == c);
+        int norm = 0;
+        std::string value;
+        if (c == 0) {
+            norm = settings_.bass_boost ? 100 : 0;
+            value = kOnOff[settings_.bass_boost ? 1 : 0];
+        } else if (c == 1) {
+            norm = settings_.bass_boost_intensity;
+            value = fmt("%d%%", settings_.bass_boost_intensity);
+        } else {
+            norm = (settings_.bass_boost_frequency - 40) * 100 / 120;
+            value = fmt("%d HZ", settings_.bass_boost_frequency);
+        }
+        draw_small_text(pixels, width, height, label_x, y, labels[c],
+                        active ? hot : dim);
+        fill(pixels, width, height, bar_x, y + 1, bar_w, 5, 0xFF1A2436);
+        fill(pixels, width, height, bar_x, y + 1, bar_w * norm / 100, 5,
+             active ? hot : cyan);
+        draw_small_text(pixels, width, height,
+                        value_x - small_text_width(value), y, value,
+                        active ? hot : dim);
+    }
+
+    draw_button(pixels, width, height, px0 + (pw - 120) / 2, py0 + 170, 120,
+                "BACK", sel_ == 3, hot, dim);
+}
+
+void Menu::draw_stereo_meter(uint32_t *pixels, int width, int height, int px0,
+                             int py0) const {
+    const int pw = std::min(304, width - 8);
+    const int x = px0 + 12;
+    const int w = std::max(1, pw - 40);
+    const int y = py0 + 156;
+    draw_small_text(pixels, width, height, x - 9, y - 1, "L", 0xFF8896AA);
+    draw_small_text(pixels, width, height, x - 9, y + 4, "R", 0xFF8896AA);
+    const auto bar = [&](float level, int yy) {
+        fill(pixels, width, height, x, yy, w, 4, 0xFF101418);
+        const int n = std::clamp(
+            (int)std::lround(level * static_cast<float>(w - 1)), 0, w - 1);
+        if (n > 0) {
+            const uint32_t color = output_clipped_
+                                       ? 0xFFFF4A4A
+                                       : (level >= 0.9f ? 0xFFFF6A4A
+                                                        : (level >= 0.7f
+                                                               ? 0xFFFFD040
+                                                               : 0xFF5BE33A));
+            fill(pixels, width, height, x, yy, n, 4, color);
+        }
+    };
+    bar(output_left_, y);
+    bar(output_right_, y + 5);
+    if (output_clipped_)
+        draw_small_text(pixels, width, height, x + w + 4, y, "CLIP",
+                        0xFFFF4A4A);
 }
 
 void Menu::draw_controls(uint32_t *pixels, int width, int height, int px0,
@@ -975,8 +1056,11 @@ void Menu::draw(uint32_t *pixels, int width, int height) const {
             draw_reverb(pixels, width, height, px0, py0);
         else if (mixer_page_ == 3)
             draw_sfx(pixels, width, height, px0, py0);
+        else if (mixer_page_ == 4)
+            draw_bass(pixels, width, height, px0, py0);
         else
             draw_mixer(pixels, width, height, px0, py0);
+        draw_stereo_meter(pixels, width, height, px0, py0);
     } else {
         const bool sound_page = (tab_ == 3 && audio_page_ == 1);
         const bool input_subpage = (tab_ == 0 && input_page_ != 0);
@@ -1108,7 +1192,8 @@ void Menu::draw(uint32_t *pixels, int width, int height) const {
             footer = "ENTER ENABLE MIXER  BACKSPACE BACK";
         } else if (mixer_page_ == 3) {
             footer = "L/R SEL UP/DN VOL S SOLO BACKSPACE BACK";
-        } else if (mixer_page_ == 1 || mixer_page_ == 2) {
+        } else if (mixer_page_ == 1 || mixer_page_ == 2 ||
+                   mixer_page_ == 4) {
             footer = "UP/DN SEL L/R CHG ENTER TGL BACKSPACE BACK";
         } else if (send_focus_ == 0) {
             footer = "L/R SEL UP/DN VOL +/- CHORUS S SOLO R REVERB";

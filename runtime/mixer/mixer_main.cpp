@@ -60,6 +60,7 @@ void apply_audio(likethewind::Audio &audio, const likethewind::Settings &s) {
         audio.set_solo_mask(0);
         audio.set_chorus(false, 15, 50, 12, 0, 30);
         audio.set_reverb(false, 60, 40, 0, 25);
+        audio.set_bass_boost(false, 50, 80);
         return;
     }
     audio.set_channel_volumes(s.ym_volume, s.pcm_volume);
@@ -72,6 +73,8 @@ void apply_audio(likethewind::Audio &audio, const likethewind::Settings &s) {
                      s.chorus_feedback, s.chorus_mix);
     audio.set_reverb(s.reverb_enabled, s.reverb_decay, s.reverb_damping,
                      s.reverb_predelay, s.reverb_mix);
+    audio.set_bass_boost(s.bass_boost, s.bass_boost_intensity,
+                         s.bass_boost_frequency);
 }
 
 void queue_audio(SDL_AudioDeviceID adev, likethewind::Audio &audio,
@@ -330,6 +333,9 @@ int run_mixer(int argc, char **argv) {
             float pcm_levels[16] = {};
             audio.get_levels(ym_levels, pcm_levels);
             menu.set_levels(ym_levels, pcm_levels);
+            float output_l = 0.0f, output_r = 0.0f;
+            audio.get_output_levels(&output_l, &output_r);
+            menu.set_output_levels(output_l, output_r, audio.output_clipped());
             menu.draw(pixels.data(), 320, 224);
 
             SDL_UpdateTexture(tex, nullptr, pixels.data(), 320 * 4);

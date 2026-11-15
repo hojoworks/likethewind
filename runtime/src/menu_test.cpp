@@ -263,6 +263,9 @@ int menutest() {
     settings.pad_device_name[PadBindGasAxis] = "Test Pedals";
     settings.pad_raw[PadBindGasAxis] = 1;
     settings.pad_gas_axis = 7;
+    settings.bass_boost = true;
+    settings.bass_boost_intensity = 65;
+    settings.bass_boost_frequency = 95;
     settings.set_device_enabled("test-disabled-device", false);
     settings.save("work/menu_settings.cfg");
     Settings loaded;
@@ -346,6 +349,9 @@ int menutest() {
                            loaded.pad_steer_rate == settings.pad_steer_rate &&
                            loaded.racing_wheel == settings.racing_wheel &&
                            loaded.steer_rebound_speed == settings.steer_rebound_speed &&
+                           loaded.bass_boost == settings.bass_boost &&
+                           loaded.bass_boost_intensity == settings.bass_boost_intensity &&
+                           loaded.bass_boost_frequency == settings.bass_boost_frequency &&
                            loaded.sfx_lane_volume[0] == settings.sfx_lane_volume[0] &&
                            loaded.sfx_lane_send[0] == settings.sfx_lane_send[0] &&
                            gamepad_binding_ok &&
@@ -577,10 +583,14 @@ int menutest() {
     reset_settings.chorus_delay = 25;
     reset_settings.chorus_feedback = 60;
     reset_settings.chorus_mix = 80;
+    reset_settings.bass_boost = true;
+    reset_settings.bass_boost_intensity = 90;
+    reset_settings.bass_boost_frequency = 150;
     reset_settings.solo_mask = (1ull << 0) | (1ull << (8 + 3));
     reset_menu.key(MenuKey::TabPrev);   // INPUT -> SYSTEM
     reset_menu.key(MenuKey::TabPrev);   // SYSTEM -> MIXER
     reset_menu.key(MenuKey::Enter);     // unlock mixer
+    reset_menu.key(MenuKey::Left);      // BASS
     reset_menu.key(MenuKey::Left);      // SFX
     reset_menu.key(MenuKey::Left);      // RESET MIXER
     reset_menu.key(MenuKey::Enter);
@@ -599,6 +609,11 @@ int menutest() {
                     reset_settings.chorus_delay == defaults.chorus_delay &&
                     reset_settings.chorus_feedback == defaults.chorus_feedback &&
                     reset_settings.chorus_mix == defaults.chorus_mix &&
+                    !reset_settings.bass_boost &&
+                    reset_settings.bass_boost_intensity ==
+                        defaults.bass_boost_intensity &&
+                    reset_settings.bass_boost_frequency ==
+                        defaults.bass_boost_frequency &&
                     reset_settings.sfx_lane_volume[0] == defaults.sfx_lane_volume[0] &&
                     reset_settings.sfx_lane_send[0] == 0 &&
                     reset_settings.sfx_lane_reverb_send[0] == 0;
@@ -675,6 +690,44 @@ int menutest() {
                 sfx_solo_ok ? "PASS" : "FAIL");
     if (!sfx_solo_ok) ++failures;
 
+    // Bass enhancer page and its per-song controls.
+    Settings bass_settings;
+    Menu bass_menu(bass_settings);
+    bass_menu.toggle();
+    bass_menu.key(MenuKey::TabPrev);   // INPUT -> SYSTEM
+    bass_menu.key(MenuKey::TabPrev);   // SYSTEM -> MIXER
+    bass_menu.key(MenuKey::Enter);     // unlock mixer
+    bass_menu.set_selection(29);       // BASS button
+    bass_menu.key(MenuKey::Enter);
+    bass_menu.set_selection(0);
+    bass_menu.key(MenuKey::Enter);     // enable
+    bass_menu.set_selection(1);
+    bass_menu.key(MenuKey::Right);     // intensity +5
+    bass_menu.set_selection(2);
+    bass_menu.key(MenuKey::Right);     // frequency +5
+    const bool bass_ok = bass_settings.bass_boost &&
+                         bass_settings.bass_boost_intensity == 55 &&
+                         bass_settings.bass_boost_frequency == 85;
+    std::printf("menutest: bass enhancer page %s\n",
+                bass_ok ? "PASS" : "FAIL");
+    if (!bass_ok) ++failures;
+    {
+        std::fill(px.begin(), px.end(), 0xFF000000u);
+        bass_menu.set_output_levels(0.62f, 0.84f, true);
+        bass_menu.draw(px.data(), Machine::kVisibleWidth,
+                       Machine::kVisibleLines);
+        std::ofstream f("work/menu_bass.ppm", std::ios::binary);
+        f << "P6\n" << Machine::kVisibleWidth << " "
+          << Machine::kVisibleLines << "\n255\n";
+        for (uint32_t p : px) {
+            const uint8_t rgb[3] = {static_cast<uint8_t>((p >> 16) & 0xFF),
+                                    static_cast<uint8_t>((p >> 8) & 0xFF),
+                                    static_cast<uint8_t>(p & 0xFF)};
+            f.write(reinterpret_cast<const char *>(rgb), 3);
+        }
+    }
+    std::printf("menutest: wrote work/menu_bass.ppm\n");
+
     // A/B monitor switch and the plate-reverb submenu.
     Settings fx_settings;
     fx_settings.audio_preset = 1;
@@ -683,6 +736,7 @@ int menutest() {
     fx_menu.key(MenuKey::TabPrev);   // INPUT -> SYSTEM
     fx_menu.key(MenuKey::TabPrev);   // SYSTEM -> MIXER
     fx_menu.key(MenuKey::Enter);     // unlock mixer
+    fx_menu.key(MenuKey::Left);      // BASS
     fx_menu.key(MenuKey::Left);      // SFX
     fx_menu.key(MenuKey::Left);      // RESET
     fx_menu.key(MenuKey::Left);      // A/B
