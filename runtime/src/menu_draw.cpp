@@ -492,7 +492,6 @@ void Menu::draw_mixer(uint32_t *pixels, int width, int height, int px0, int py0)
     const uint32_t dim = 0xFF8896AA;
     const uint32_t hot = 0xFFFFD040;
     const uint32_t cyan = 0xFF6FD3FF;
-    const uint32_t sfx_color = 0xFFFF9A55;
     const uint32_t solo_color = 0xFFFF5A9A;
 
     std::string status;
@@ -840,66 +839,85 @@ void Menu::draw_steering(uint32_t *pixels, int width, int height, int px0,
     const uint32_t dim = 0xFF8896AA;
     const uint32_t hot = 0xFFFFD040;
     const int pw = std::min(304, width - 8);
-    const int gx = px0 + 10;
-    const int gy = py0 + 44;
-    const int gw = 84;
-    const int gh = 56;
-    const int cx = gx + gw / 2;
-    const int cy = gy + gh / 2;
-
-    fill(pixels, width, height, gx, gy, gw, gh, 0xFF0A0F16);
-    fill(pixels, width, height, gx, gy, gw, 1, 0xFF4A6A9A);
-    fill(pixels, width, height, gx, gy + gh - 1, gw, 1, 0xFF4A6A9A);
-    fill(pixels, width, height, gx, gy, 1, gh, 0xFF4A6A9A);
-    fill(pixels, width, height, gx + gw - 1, gy, 1, gh, 0xFF4A6A9A);
-    // Dead-zone box and axes.
-    const int dz = gw * std::clamp(settings_.steer_deadzone, 0, 40) / 100 / 2;
-    if (dz > 0)
-        fill(pixels, width, height, cx - dz, cy - dz, dz * 2, dz * 2,
-             0xFF1A2436, 180);
-    fill(pixels, width, height, cx, gy + 4, 1, gh - 8, 0xFF33465E);
-    fill(pixels, width, height, gx + 4, cy, gw - 8, 1, 0xFF33465E);
-
-    const int axis = settings_.pad_steer_axis;
-    const int value = std::clamp(steer_value_, -32767, 32767);
-    int nx = 0, ny = 0;
-    if (axis == 1 || axis == 3)
-        ny = value;
-    else
-        nx = value;
-    int dx = cx + nx * (gw / 2 - 5) / 32767;
-    int dy = cy + ny * (gh / 2 - 5) / 32767;
-    fill(pixels, width, height, dx - 2, dy - 2, 5, 5, hot);
-
-    const int text_x = px0 + 104;
-    draw_small_text(pixels, width, height, text_x, py0 + 44,
-                    "STEERING SETUP", hot);
-    char line[64];
-    std::snprintf(line, sizeof(line), "AXIS %s",
-                  pad_axis_name(axis).c_str());
-    draw_small_text(pixels, width, height, text_x, py0 + 56, line, dim);
-    std::snprintf(line, sizeof(line), "VALUE %+d%%", value * 100 / 32767);
-    draw_small_text(pixels, width, height, text_x, py0 + 68, line, dim);
-    std::snprintf(line, sizeof(line), "WHEEL %d", wheel_);
-    draw_small_text(pixels, width, height, text_x, py0 + 80, line, dim);
-
-    const int bar_x = text_x;
-    const int bar_y = py0 + 92;
-    const int bar_w = std::min(174, pw - (text_x - px0) - 10);
-    fill(pixels, width, height, bar_x, bar_y, bar_w, 7, 0xFF2A3448);
+    const int sw = std::min(260, pw - 20);
+    const int sx = px0 + (pw - sw) / 2;
+    const int sy = py0 + 54;
+    const int bar_w = std::max(90, sw - 130);
+    const int bar_x = sx + (sw - bar_w) / 2;
+    const int bar_y = sy + 7;
     const int wheel = std::clamp(wheel_, 0x20, 0xE0);
     const int centre_x = bar_x + bar_w / 2;
     const int wheel_x =
         bar_x + (wheel - 0x20) * (bar_w - 1) / (0xE0 - 0x20);
+
+    fill(pixels, width, height, sx, sy, sw, 24, 0xFF0A0F16);
+    fill(pixels, width, height, sx, sy, sw, 1, 0xFF4A6A9A);
+    fill(pixels, width, height, sx, sy + 23, sw, 1, 0xFF4A6A9A);
+    fill(pixels, width, height, sx, sy, 1, 24, 0xFF4A6A9A);
+    fill(pixels, width, height, sx + sw - 1, sy, 1, 24, 0xFF4A6A9A);
+    const int steer_w = small_text_width("STEER");
+    const int left_x = sx + (bar_x - sx - steer_w) / 2;
+    draw_small_text(pixels, width, height, left_x, sy + 9, "STEER", hot);
+    fill(pixels, width, height, bar_x, bar_y, bar_w, 10, 0xFF2A3448);
+    const int dz = bar_w * std::clamp(settings_.steer_deadzone, 0, 40) /
+                   100 / 2;
+    if (dz > 0)
+        fill(pixels, width, height, centre_x - dz, bar_y, dz * 2, 10,
+             0xFF1A2436, 180);
     const int fill_lo = std::min(centre_x, wheel_x);
     const int fill_hi = std::max(centre_x, wheel_x);
     if (fill_hi > fill_lo)
-        fill(pixels, width, height, fill_lo, bar_y, fill_hi - fill_lo, 7,
+        fill(pixels, width, height, fill_lo, bar_y, fill_hi - fill_lo, 10,
              wheel < 0x80 ? 0xFF6FD3FF : hot);
-    fill(pixels, width, height, centre_x, bar_y - 2, 1, 11, 0xFFDCE4EE);
-    fill(pixels, width, height, wheel_x, bar_y - 2, 2, 11, hot);
-    draw_small_text(pixels, width, height, px0 + 10, py0 + 104,
-                    "MOVE SELECTED AXIS TO TEST", dim);
+    fill(pixels, width, height, centre_x, bar_y - 1, 1, 12, 0xFFDCE4EE);
+    fill(pixels, width, height, wheel_x, bar_y - 1, 2, 12, hot);
+    char line[32];
+    std::snprintf(line, sizeof(line), "WHEEL %d", wheel_);
+    const int wheel_w = small_text_width(line);
+    const int right_side = sx + sw - (bar_x + bar_w);
+    const int wheel_text_x =
+        bar_x + bar_w + (right_side - wheel_w) / 2;
+    draw_small_text(pixels, width, height, wheel_text_x, sy + 9, line, dim);
+}
+
+void Menu::draw_pedals(uint32_t *pixels, int width, int height, int px0,
+                       int py0) const {
+    const uint32_t dim = 0xFF8896AA;
+    const uint32_t hot = 0xFFFFD040;
+    const int pw = std::min(304, width - 8);
+    const int sw = std::min(260, pw - 20);
+    const int sx = px0 + (pw - sw) / 2;
+    const int sy = py0 + 54;
+    const int bar_w = std::max(90, sw - 130);
+    const int bar_x = sx + (sw - bar_w) / 2;
+    const int left_w = bar_x - sx;
+    const int right_w = sx + sw - (bar_x + bar_w);
+
+    fill(pixels, width, height, sx, sy, sw, 40, 0xFF0A0F16);
+    fill(pixels, width, height, sx, sy, sw, 1, 0xFF4A6A9A);
+    fill(pixels, width, height, sx, sy + 39, sw, 1, 0xFF4A6A9A);
+    fill(pixels, width, height, sx, sy, 1, 40, 0xFF4A6A9A);
+    fill(pixels, width, height, sx + sw - 1, sy, 1, 40, 0xFF4A6A9A);
+    auto bar = [&](const char *label, int value, int y) {
+        const int pct = std::clamp(value, 0, 255) * 100 / 255;
+        const int label_w = small_text_width(label);
+        draw_small_text(pixels, width, height,
+                        sx + (left_w - label_w) / 2, y + 2, label, dim);
+        fill(pixels, width, height, bar_x, y, bar_w, 10, 0xFF2A3448);
+        fill(pixels, width, height, bar_x, y, bar_w * pct / 100, 10,
+             pct > 0 ? hot : 0xFF2A3448);
+        const int dead_x = bar_x + bar_w * settings_.pedal_deadzone / 100;
+        if (dead_x > bar_x && dead_x < bar_x + bar_w)
+            fill(pixels, width, height, dead_x, y - 1, 1, 12, 0xFFDCE4EE);
+        char text[16];
+        std::snprintf(text, sizeof(text), "%d%%", pct);
+        const int text_w = small_text_width(text);
+        draw_small_text(pixels, width, height,
+                        bar_x + bar_w + (right_w - text_w) / 2, y + 2,
+                        text, dim);
+    };
+    bar("GAS", gas_value_, sy + 7);
+    bar("BRAKE", brake_value_, sy + 23);
 }
 
 void Menu::draw(uint32_t *pixels, int width, int height) const {
@@ -973,36 +991,67 @@ void Menu::draw(uint32_t *pixels, int width, int height) const {
             draw_mixer(pixels, width, height, px0, py0);
     } else {
         const bool sound_page = (tab_ == 3 && audio_page_ == 1);
-        const bool bindings_page = (tab_ == 0 && input_page_ == 1);
-        const bool steering_page = (tab_ == 0 && input_page_ == 2);
+        const bool input_subpage = (tab_ == 0 && input_page_ != 0);
+        const bool steering_page = (tab_ == 0 && input_page_ == 3);
+        const bool pedals_page = (tab_ == 0 && input_page_ == 4);
         if (sound_page)
             draw_small_text(pixels, width, height, px0 + 10, py0 + 44,
                             mixer_mode_ ? "SELECT SONG" : "SOUND TEST", 0xFFFFD040);
-        if (bindings_page) {
-            std::string prompt = "CONTROLLER BINDINGS";
+        if (input_subpage) {
             if (binding_ >= 0) {
-                prompt = binding_waiting_ ? "RELEASE INPUTS"
-                                          : "PRESS A CONTROLLER BUTTON";
+                std::string prompt =
+                    binding_waiting_ ? "RELEASE INPUTS"
+                                     : "PRESS A BUTTON OR MOVE AN AXIS";
                 if (!binding_waiting_ && sel >= 0 && sel < (int)list.size())
                     prompt = "BIND " + list[sel].label +
-                             (binding_axis() ? "  MOVE STICK/TRIGGER"
+                             (binding_axis() ? "  MOVE AXIS"
                                              : "  PRESS BUTTON");
+                draw_small_text(pixels, width, height, px0 + 10, py0 + 44,
+                                prompt, 0xFFFF5A5A);
+            } else {
+                const char *labels[] = {"DEVICES", "BUTTONS", "STEERING",
+                                        "PEDALS"};
+                const int pages[] = {1, 2, 3, 4};
+                constexpr int gap = 18;
+                int widths[4];
+                int total = gap * 3;
+                for (int i = 0; i < 4; ++i) {
+                    widths[i] = small_text_width(labels[i]);
+                    total += widths[i];
+                }
+                int tx = px0 + (pw - total) / 2;
+                for (int i = 0; i < 4; ++i) {
+                    const bool active = (input_page_ == pages[i]);
+                    draw_small_text(pixels, width, height, tx, py0 + 44,
+                                    labels[i],
+                                    active ? 0xFFFF5A5A : 0xFF6FD3FF);
+                    if (active)
+                        fill(pixels, width, height, tx, py0 + 50, widths[i], 1,
+                             0xFFFF5A5A);
+                    tx += widths[i] + gap;
+                }
             }
-            draw_small_text(pixels, width, height, px0 + 10, py0 + 44, prompt,
-                            binding_ >= 0 ? 0xFFFF5A5A : 0xFFFFD040);
         }
         if (steering_page) draw_steering(pixels, width, height, px0, py0);
+        if (pedals_page) draw_pedals(pixels, width, height, px0, py0);
         const int row_y =
-            py0 + (steering_page ? 116 : (sound_page || bindings_page) ? 58 : 48);
-        const int row_h = 10;
+            py0 + (steering_page ? 84
+                                 : pedals_page
+                                       ? 116
+                                       : (sound_page || input_subpage) ? 58
+                                                                       : 48);
+        const int row_limit = py0 + ph - 16;
         const int label_x = px0 + 10;
         const int value_x = px0 + pw - 10;
+        int y = row_y;
         for (int i = 0; i < (int)list.size(); i++) {
-            const int y = row_y + i * row_h;
-            if (y + 6 > py0 + ph - 16) break;
+            if (y + 6 > row_limit) break;
             const Item &it = list[i];
             const bool active = (i == sel);
-            const uint32_t col = (it.kind == Kind::Info) ? 0xFF8896AA : (active ? 0xFFFFD040 : 0xFFDCE4EE);
+            const uint32_t col =
+                (it.kind == Kind::Info || it.disabled)
+                    ? 0xFF8896AA
+                    : (active ? 0xFFFFD040 : 0xFFDCE4EE);
             if (active && it.kind != Kind::Info)
                 draw_small_text(pixels, width, height, px0 + 3, y, ">", 0xFFFFD040);
             draw_small_text(pixels, width, height, label_x, y, it.label, col);
@@ -1025,6 +1074,19 @@ void Menu::draw(uint32_t *pixels, int width, int height) const {
                 const int vx = value_x - tw;
                 draw_small_text(pixels, width, height, vx, y, it.value, col);
             }
+            // System is the dense page: normal rows stay readable at 10 px,
+            // the separator uses 5 px, and the diagnostics at the bottom use
+            // a compact 7 px line height.
+            if (tab_ == 5) {
+                if (it.kind == Kind::Info)
+                    y += it.label.empty() ? 5 : 7;
+                else
+                    y += 10;
+            } else if (tab_ == 0 && input_page_ == 3) {
+                y += (it.kind == Kind::Info && it.label.empty()) ? 6 : 10;
+            } else {
+                y += 10;
+            }
         }
         if (tab_ == 0 && input_page_ == 0)
             draw_controls(pixels, width, height, px0, py0);
@@ -1041,13 +1103,18 @@ void Menu::draw(uint32_t *pixels, int width, int height) const {
     if (tab_ == 3 && audio_page_ == 1) {
         footer = mixer_mode_ ? "UP/DN SEL ENTER PLAY Q/E MIXER"
                              : "UP/DN SEL  ENTER PLAY  BACK STOP";
-    } else if (tab_ == 0 && input_page_ == 1) {
-        footer = binding_ >= 0
-                     ? (binding_axis() ? "MOVE STICK OR TRIGGER  BACKSPACE CANCEL"
-                                       : "PRESS A CONTROLLER BUTTON  BACKSPACE CANCEL")
-                     : "UP/DN SEL  ENTER BIND  BACKSPACE BACK";
-    } else if (tab_ == 0 && input_page_ == 2) {
-        footer = "UP/DN SEL  L/R CHG  BACKSPACE BACK";
+    } else if (tab_ == 0 && input_page_ != 0) {
+        if (binding_ >= 0) {
+            footer = binding_axis()
+                         ? "MOVE AN AXIS  BACKSPACE CANCEL"
+                         : "PRESS A BUTTON  BACKSPACE CANCEL";
+        } else if (input_page_ == 1) {
+            footer = "Q/E SUBTAB  ENTER ON/OFF  BACKSPACE BACK";
+        } else if (input_page_ == 2) {
+            footer = "Q/E SUBTAB  ENTER BIND  DEL CLEAR  BACKSPACE BACK";
+        } else {
+            footer = "Q/E SUBTAB  L/R CHG  ENTER BIND  DEL CLEAR  BACKSPACE BACK";
+        }
     } else if (tab_ == 4) {
         if (mixer_locked_) {
             footer = "ENTER ENABLE MIXER  BACKSPACE BACK";
@@ -1066,6 +1133,25 @@ void Menu::draw(uint32_t *pixels, int width, int height) const {
         footer_text = mix_track_ + "  " + footer_text;
     draw_small_text(pixels, width, height, px0 + 8, py0 + ph - 12, footer_text,
                     0xFF8896AA);
+
+    if (confirm_clear_) {
+        const int bw = std::min(262, pw - 16);
+        const int bh = 58;
+        const int bx = px0 + (pw - bw) / 2;
+        const int by = py0 + (ph - bh) / 2;
+        fill(pixels, width, height, bx - 2, by - 2, bw + 4, bh + 4,
+             0xFF4A6A9A, 255);
+        fill(pixels, width, height, bx, by, bw, bh, 0x00101828, 248);
+        const char *title = "CLEAR NVRAM?";
+        draw_small_text(pixels, width, height,
+                        bx + (bw - small_text_width(title)) / 2, by + 9,
+                        title, 0xFFFFD040);
+        draw_small_text(pixels, width, height, bx + 10, by + 24,
+                        "ERASE BATTERY RAM AND HIGH SCORES?",
+                        0xFFDCE4EE);
+        draw_small_text(pixels, width, height, bx + 10, by + 41,
+                        "ENTER = CLEAR    BACK = CANCEL", 0xFF6FD3FF);
+    }
 }
 
 } // namespace likethewind

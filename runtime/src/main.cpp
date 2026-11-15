@@ -13,6 +13,12 @@
 #include "likethewind/settings.h"
 #include "likethewind/window.h"
 
+#ifdef LIKETHEWIND_HAVE_SDL
+namespace likethewind {
+int inputdevicetest();
+}
+#endif
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -242,7 +248,7 @@ static void usage(const char *argv0) {
                 "[--screenshot FILE] [--slice N] [--forward] [--interp] "
                 "[--coverage FILE] "
                 "[--selftest] [--videotest] [--fallbacktest] [--windowtest] [--menutest] [--inputtest] "
-                "[--crash-test] [--crash-test-frame N] [--crash-test-cpp]\n",
+                "[--inputdevicetest] [--crash-test] [--crash-test-frame N] [--crash-test-cpp]\n",
                 argv0);
 }
 
@@ -263,6 +269,7 @@ int main(int argc, char **argv) {
     bool wtest = false;
     bool mtest = false;
     bool itest = false;
+    bool idevtest = false;
     bool crash_test = false;
     bool crash_test_cpp = false;
     int crash_test_frame = -1;
@@ -305,6 +312,7 @@ int main(int argc, char **argv) {
         else if (!std::strcmp(argv[i], "--windowtest")) wtest = true;
         else if (!std::strcmp(argv[i], "--menutest")) mtest = true;
         else if (!std::strcmp(argv[i], "--inputtest")) itest = true;
+        else if (!std::strcmp(argv[i], "--inputdevicetest")) idevtest = true;
         else if (!std::strcmp(argv[i], "--crash-test")) crash_test = true;
         else if (!std::strcmp(argv[i], "--crash-test-cpp")) crash_test_cpp = true;
         else if (!std::strcmp(argv[i], "--crash-test-frame") && i + 1 < argc) crash_test_frame = std::atoi(argv[++i]);
@@ -379,6 +387,14 @@ int main(int argc, char **argv) {
     if (wtest) return windowtest();
     if (mtest) return menutest();
     if (itest) return inputtest();
+#ifdef LIKETHEWIND_HAVE_SDL
+    if (idevtest) return inputdevicetest();
+#else
+    if (idevtest) {
+        std::fprintf(stderr, "inputdevicetest: build has no SDL support\n");
+        return 1;
+    }
+#endif
     if (trace_line >= Machine::kLines || dump_line >= Machine::kLines) {
         std::fprintf(stderr, "likethewind: --trace-line/--dump-line must be in 0..%d\n",
                      Machine::kLines - 1);

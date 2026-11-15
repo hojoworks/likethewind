@@ -14,7 +14,44 @@ static int as_int(const std::string &s) {
     return (int)std::strtol(s.c_str(), nullptr, 10);
 }
 
+static const char *const kPadBindKeys[PadBindCount] = {
+    "pad_steer_left", "pad_steer_right", "pad_gas",       "pad_brake",
+    "pad_gear",       "pad_start",       "pad_coin",      "pad_steer_axis",
+    "pad_gas_axis",   "pad_brake_axis",
+};
+
+static std::string trim(const std::string &s) {
+    size_t begin = s.find_first_not_of(" \t\r");
+    if (begin == std::string::npos) return "";
+    size_t end = s.find_last_not_of(" \t\r");
+    return s.substr(begin, end - begin + 1);
+}
+
+bool Settings::device_enabled(const std::string &guid) const {
+    if (guid.empty()) return true;
+    return std::find(disabled_devices.begin(), disabled_devices.end(), guid) ==
+           disabled_devices.end();
+}
+
+void Settings::set_device_enabled(const std::string &guid, bool enabled) {
+    if (guid.empty()) return;
+    auto it = std::find(disabled_devices.begin(), disabled_devices.end(), guid);
+    if (enabled) {
+        if (it != disabled_devices.end()) disabled_devices.erase(it);
+    } else if (it == disabled_devices.end()) {
+        disabled_devices.push_back(guid);
+    }
+}
+
 void Settings::clamp() {
+    disabled_devices.erase(
+        std::remove_if(disabled_devices.begin(), disabled_devices.end(),
+                       [](const std::string &guid) { return guid.empty(); }),
+        disabled_devices.end());
+    std::sort(disabled_devices.begin(), disabled_devices.end());
+    disabled_devices.erase(
+        std::unique(disabled_devices.begin(), disabled_devices.end()),
+        disabled_devices.end());
     coin_a = (uint8_t)std::clamp<int>(coin_a, 0, 15);
     coin_b = (uint8_t)std::clamp<int>(coin_b, 0, 15);
     cabinet = (uint8_t)std::clamp<int>(cabinet, 0, 3);
@@ -62,16 +99,26 @@ void Settings::clamp() {
     centre_rate = std::clamp(centre_rate, 0, 10);
     steer_rebound = std::clamp(steer_rebound, 0, 32);
     steer_rebound_speed = std::clamp(steer_rebound_speed, 1, 10);
-    pad_steer_left = std::clamp(pad_steer_left, -1, 20);
-    pad_steer_right = std::clamp(pad_steer_right, -1, 20);
-    pad_gas = std::clamp(pad_gas, -1, 20);
-    pad_brake = std::clamp(pad_brake, -1, 20);
-    pad_gear = std::clamp(pad_gear, -1, 20);
-    pad_start = std::clamp(pad_start, -1, 20);
-    pad_coin = std::clamp(pad_coin, -1, 20);
-    pad_steer_axis = std::clamp(pad_steer_axis, -1, 5);
-    pad_gas_axis = std::clamp(pad_gas_axis, -1, 5);
-    pad_brake_axis = std::clamp(pad_brake_axis, -1, 5);
+    for (int i = 0; i < PadBindCount; ++i)
+        pad_raw[i] = pad_raw[i] ? 1 : 0;
+    auto clamp_button = [&](int &value, int index) {
+        const int max = pad_raw[index] ? 127 : 20;
+        value = std::clamp(value, -1, max);
+    };
+    auto clamp_axis = [&](int &value, int index) {
+        const int max = pad_raw[index] ? 127 : 5;
+        value = std::clamp(value, -1, max);
+    };
+    clamp_button(pad_steer_left, PadBindSteerLeft);
+    clamp_button(pad_steer_right, PadBindSteerRight);
+    clamp_button(pad_gas, PadBindGas);
+    clamp_button(pad_brake, PadBindBrake);
+    clamp_button(pad_gear, PadBindGear);
+    clamp_button(pad_start, PadBindStart);
+    clamp_button(pad_coin, PadBindCoin);
+    clamp_axis(pad_steer_axis, PadBindSteerAxis);
+    clamp_axis(pad_gas_axis, PadBindGasAxis);
+    clamp_axis(pad_brake_axis, PadBindBrakeAxis);
 }
 
 void Settings::reset_gamepad() {
@@ -88,6 +135,9 @@ void Settings::reset_gamepad() {
     pad_gas_axis_invert = defaults.pad_gas_axis_invert;
     pad_brake_axis = defaults.pad_brake_axis;
     pad_brake_axis_invert = defaults.pad_brake_axis_invert;
+    pad_device = {};
+    pad_device_name = {};
+    pad_raw = {};
     racing_wheel = defaults.racing_wheel;
 }
 
@@ -167,6 +217,7 @@ void Settings::reset_music_mixer() {
 bool Settings::load(const std::string &path) {
     std::ifstream f(path);
     if (!f) return false;
+    disabled_devices.clear();
     std::string line;
     bool have_frame_rate = false;
     while (std::getline(f, line)) {
@@ -251,6 +302,7 @@ bool Settings::load(const std::string &path) {
         else if (key == "reverb_predelay") reverb_predelay = n;
         else if (key == "reverb_mix") reverb_mix = n;
         else if (key == "run_in_menu") run_in_menu = n != 0;
+        else if (key == "save_score") save_score = n != 0;
         else if (key == "restore_female_voices") restore_female_voices = n != 0;
         else if (key == "restore_additional_voices") restore_additional_voices = n != 0;
         else if (key == "special_tour") special_tour = n != 0;
@@ -277,6 +329,26 @@ bool Settings::load(const std::string &path) {
         else if (key == "pad_brake_axis_invert") pad_brake_axis_invert = n != 0;
         else if (key == "racing_wheel") racing_wheel = n != 0;
         else if (key == "auto_gear") auto_gear = n != 0;
+        else if (key == "disabled_device") {
+            const std::string guid = trim(val);
+            if (!guid.empty()) disabled_devices.push_back(guid);
+        } else {
+            for (int i = 0; i < PadBindCount; ++i) {
+                const std::string prefix = kPadBindKeys[i];
+                if (key == prefix + "_device") {
+                    pad_device[i] = trim(val);
+                    break;
+                }
+                if (key == prefix + "_device_name") {
+                    pad_device_name[i] = trim(val);
+                    break;
+                }
+                if (key == prefix + "_raw") {
+                    pad_raw[i] = n != 0;
+                    break;
+                }
+            }
+        }
     }
     clamp();
     return true;
@@ -337,6 +409,7 @@ void Settings::save(const std::string &path) const {
       << "reverb_predelay=" << reverb_predelay << "\n"
       << "reverb_mix=" << reverb_mix << "\n"
       << "run_in_menu=" << (run_in_menu ? 1 : 0) << "\n"
+      << "save_score=" << (save_score ? 1 : 0) << "\n"
       << "restore_female_voices=" << (restore_female_voices ? 1 : 0) << "\n"
       << "restore_additional_voices=" << (restore_additional_voices ? 1 : 0) << "\n"
       << "special_tour=" << (special_tour ? 1 : 0) << "\n"
@@ -363,6 +436,13 @@ void Settings::save(const std::string &path) const {
       << "pad_brake_axis_invert=" << (pad_brake_axis_invert ? 1 : 0) << "\n"
       << "racing_wheel=" << (racing_wheel ? 1 : 0) << "\n"
       << "auto_gear=" << (auto_gear ? 1 : 0) << "\n";
+    for (int i = 0; i < PadBindCount; ++i) {
+        f << kPadBindKeys[i] << "_device=" << pad_device[i] << "\n";
+        f << kPadBindKeys[i] << "_device_name=" << pad_device_name[i] << "\n";
+        f << kPadBindKeys[i] << "_raw=" << (pad_raw[i] ? 1 : 0) << "\n";
+    }
+    for (const std::string &guid : disabled_devices)
+        f << "disabled_device=" << guid << "\n";
 }
 
 bool Settings::load_mix(const std::string &path) {

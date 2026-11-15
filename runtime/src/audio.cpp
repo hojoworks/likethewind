@@ -32,7 +32,11 @@ constexpr int kOutFrames = 800;          // 48000 / 60
 constexpr float kVoiceHighPassHz = 175.0f;
 constexpr float kAnnouncerHighPassHz = 250.0f;
 constexpr float kAnnouncerPostGainDb = -1.0f;
-constexpr float kFemalePostGainDb = -0.5f;
+constexpr float kFemalePostGainDb = -1.25f;
+// The second announcer line after course selection ("Do your best and good
+// luck") sits a little too far forward over the music.
+constexpr float kCourseSelectAnnouncerPostGainDb = -1.5f;
+constexpr uint8_t kCourseSelectAnnouncerSample = 0x3A;
 // The PCM voices were recorded for a 31.46 kHz DAC. Keep the speech band but
 // roll off the top end before the 48 kHz resampler so high-frequency images
 // do not turn into aliasing noise. High enough to leave consonants intact.
@@ -731,7 +735,7 @@ struct Audio::Impl {
             g_sample_gender[sample] == 4 && g_sample_event[sample] == 1;
         const bool male_passing =
             g_sample_gender[sample] == 1 && g_sample_event[sample] == 1;
-        const float gain_db = male_passing ? 0.0f
+        float gain_db = male_passing ? 0.0f
                               : enemy_passing ? 1.0f
                               : g_sample_gender[sample] == 1
                                   ? 2.0f
@@ -740,6 +744,8 @@ struct Audio::Impl {
                               : g_sample_gender[sample] == 3
                                   ? 2.0f + kAnnouncerPostGainDb
                                   : 2.0f;
+        if (sample == kCourseSelectAnnouncerSample)
+            gain_db += kCourseSelectAnnouncerPostGainDb;
         v.voice_gain = v.voice_effect
                            ? std::pow(10.0f, gain_db / 20.0f)
                            : 1.0f;
@@ -1160,7 +1166,6 @@ struct Audio::Impl {
         std::fill(std::begin(pcm_frame_peak), std::end(pcm_frame_peak), 0.0f);
         std::fill(std::begin(sfx_frame_peak), std::end(sfx_frame_peak), 0.0f);
         const uint64_t start = cpu.cyc;
-        const uint64_t end = start + kZ80PerFrame;
         auto run_z80_to = [&](uint64_t target) {
             // Never let a corrupt/overflowed target turn one sample into a
             // multi-minute sound-CPU run. Four emulated frames is already far

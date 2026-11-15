@@ -66,6 +66,22 @@ std::string pad_axis_name(int axis, bool invert = false) {
     return std::string(kPadAxes[axis]) + (invert ? "-" : "");
 }
 
+std::string pad_binding_display(const Settings &s, int action, int value,
+                                bool axis, bool invert = false) {
+    if (action < 0 || action >= PadBindCount) return "UNBOUND";
+    const bool raw = s.pad_raw[action] != 0;
+    if (value < 0) return "UNBOUND";
+    std::string control = raw ? (axis ? "AX " : "BTN ") + std::to_string(value)
+                              : (axis ? pad_axis_name(value, invert)
+                                      : pad_button_name(value));
+    if (raw && axis && invert) control += "-";
+    if (s.pad_device[action].empty()) return control;
+    std::string name = s.pad_device_name[action];
+    if (name.size() > (raw ? 16u : 12u)) name.resize(raw ? 16 : 12);
+    if (name.empty()) name = raw ? "JOY" : "DEVICE";
+    return name + " " + control;
+}
+
 std::string fmt(const char *f, int v) {
     char b[64];
     std::snprintf(b, sizeof(b), f, v);
@@ -103,69 +119,139 @@ int wrap(int v, int lo, int hi, int delta) {
 std::vector<Menu::Item> Menu::items() const {
     std::vector<Item> out;
     switch (tab_) {
-    case 0:
-        if (input_page_ == 2) {
-            out.push_back({"STEER DEADZONE", fmt("%d%%", settings_.steer_deadzone),
+    case 0: {
+        auto mark_disabled = [&](int index, int action) {
+            if (!settings_.pad_device[action].empty() &&
+                !settings_.device_enabled(settings_.pad_device[action]))
+                out[index].disabled = true;
+        };
+        if (input_page_ == 1) {
+            constexpr size_t kMaxDevices = 10;
+            const size_t count =
+                std::min(input_devices_.size(), kMaxDevices);
+            for (size_t i = 0; i < count; ++i) {
+                std::string name = input_devices_[i].name;
+                if (name.size() > 22) {
+                    name.resize(20);
+                    name += "..";
+                }
+                if (name.empty()) name = "INPUT DEVICE";
+                const bool enabled =
+                    settings_.device_enabled(input_devices_[i].guid);
+                Item item;
+                item.label = name;
+                item.value = kOnOff[enabled ? 1 : 0];
+                item.kind = Kind::Value;
+                item.id = 200 + (int)i;
+                item.disabled = !enabled;
+                out.push_back(item);
+            }
+            if (input_devices_.empty())
+                out.push_back({"NO INPUT DEVICES DETECTED", "", Kind::Info, 0});
+            else if (input_devices_.size() > count)
+                out.push_back({"MORE DEVICES NOT SHOWN", "", Kind::Info, 0});
+            out.push_back({"BACK", "", Kind::Action, 111});
+        } else if (input_page_ == 2) {
+            out.push_back({"STEER LEFT",
+                           pad_binding_display(settings_, PadBindSteerLeft,
+                                               settings_.pad_steer_left, false),
+                           Kind::Action, 100});
+            out.push_back({"STEER RIGHT",
+                           pad_binding_display(settings_, PadBindSteerRight,
+                                               settings_.pad_steer_right, false),
+                           Kind::Action, 101});
+            out.push_back({"ACCELERATE",
+                           pad_binding_display(settings_, PadBindGas,
+                                               settings_.pad_gas, false),
+                           Kind::Action, 102});
+            out.push_back({"BRAKE",
+                           pad_binding_display(settings_, PadBindBrake,
+                                               settings_.pad_brake, false),
+                           Kind::Action, 103});
+            out.push_back({"GEAR",
+                           pad_binding_display(settings_, PadBindGear,
+                                               settings_.pad_gear, false),
+                           Kind::Action, 104});
+            out.push_back({"START",
+                           pad_binding_display(settings_, PadBindStart,
+                                               settings_.pad_start, false),
+                           Kind::Action, 105});
+            out.push_back({"COIN",
+                           pad_binding_display(settings_, PadBindCoin,
+                                               settings_.pad_coin, false),
+                           Kind::Action, 106});
+            out.push_back({"RESET ALL BINDINGS", "", Kind::Action, 110});
+            mark_disabled(0, PadBindSteerLeft);
+            mark_disabled(1, PadBindSteerRight);
+            mark_disabled(2, PadBindGas);
+            mark_disabled(3, PadBindBrake);
+            mark_disabled(4, PadBindGear);
+            mark_disabled(5, PadBindStart);
+            mark_disabled(6, PadBindCoin);
+        } else if (input_page_ == 3) {
+            out.push_back({"RACING WHEEL",
+                           kOnOff[settings_.racing_wheel ? 1 : 0],
+                           Kind::Value, 12});
+            out.push_back({"", "", Kind::Info, 0});
+            out.push_back({"STEER AXIS",
+                           pad_binding_display(settings_, PadBindSteerAxis,
+                                               settings_.pad_steer_axis, true),
+                           Kind::Action, 120});
+            out.push_back({"STEER DEADZONE",
+                           fmt("%d%%", settings_.steer_deadzone),
                            Kind::Value, 0});
-            out.push_back({"DIGITAL STEER RATE", fmt("%d", settings_.steer_rate),
+            out.push_back({"", "", Kind::Info, 0});
+            out.push_back({"DIGITAL RATE", fmt("%d", settings_.steer_rate),
                            Kind::Value, 2});
-            out.push_back({"ANALOG STEER RATE",
+            out.push_back({"ANALOG RATE",
                            settings_.pad_steer_rate == 0
                                ? "DIRECT"
                                : fmt("%d", settings_.pad_steer_rate),
                            Kind::Value, 7});
-            out.push_back({"CENTRE RATE", fmt("%d", settings_.centre_rate), Kind::Value, 3});
+            out.push_back({"CENTRE RATE", fmt("%d", settings_.centre_rate),
+                           Kind::Value, 3});
             out.push_back({"STEER REBOUND", fmt("%d", settings_.steer_rebound),
                            Kind::Value, 4});
-            out.push_back({"REBOUND SPEED", fmt("%d", settings_.steer_rebound_speed),
+            out.push_back({"REBOUND SPEED",
+                           fmt("%d", settings_.steer_rebound_speed),
                            Kind::Value, 8});
-        } else if (input_page_ == 1) {
-            // Keep each physical control's digital and analog bindings
-            // together instead of listing every button before every axis.
-            out.push_back({"STEER LEFT", pad_button_name(settings_.pad_steer_left),
-                           Kind::Action, 100});
-            out.push_back({"STEER RIGHT", pad_button_name(settings_.pad_steer_right),
-                           Kind::Action, 101});
-            out.push_back({"STEER AXIS", pad_axis_name(settings_.pad_steer_axis),
-                           Kind::Action, 120});
-            out.push_back({"ACCELERATE", pad_button_name(settings_.pad_gas),
-                           Kind::Action, 102});
+            mark_disabled(2, PadBindSteerAxis);
+        } else if (input_page_ == 4) {
             out.push_back({"GAS AXIS",
-                           pad_axis_name(settings_.pad_gas_axis,
-                                         settings_.pad_gas_axis_invert),
+                           pad_binding_display(settings_, PadBindGasAxis,
+                                               settings_.pad_gas_axis, true,
+                                               settings_.pad_gas_axis_invert),
                            Kind::Action, 121});
-            out.push_back({"BRAKE", pad_button_name(settings_.pad_brake),
-                           Kind::Action, 103});
             out.push_back({"BRAKE AXIS",
-                           pad_axis_name(settings_.pad_brake_axis,
-                                         settings_.pad_brake_axis_invert),
+                           pad_binding_display(settings_, PadBindBrakeAxis,
+                                               settings_.pad_brake_axis, true,
+                                               settings_.pad_brake_axis_invert),
                            Kind::Action, 122});
             out.push_back({"PEDAL DEADZONE",
                            fmt("%d%%", settings_.pedal_deadzone),
                            Kind::Value, 1});
-            out.push_back({"GEAR", pad_button_name(settings_.pad_gear),
-                           Kind::Action, 104});
-            out.push_back({"START", pad_button_name(settings_.pad_start),
-                           Kind::Action, 105});
-            out.push_back({"COIN", pad_button_name(settings_.pad_coin),
-                           Kind::Action, 106});
-            out.push_back({"RESET DEFAULTS", "", Kind::Action, 110});
-            out.push_back({"BACK", "", Kind::Action, 111});
+            mark_disabled(0, PadBindGasAxis);
+            mark_disabled(1, PadBindBrakeAxis);
         } else {
             out.push_back({"PUSH START", kOnOff[settings_.push_start ? 1 : 0], Kind::Value, 5});
-            out.push_back({"RACING WHEEL", kOnOff[settings_.racing_wheel ? 1 : 0],
-                           Kind::Value, 12});
             out.push_back({"AUTOMATIC GEARBOX", kOnOff[settings_.auto_gear ? 1 : 0],
                            Kind::Value, 13});
             out.push_back({"CONTROLLER BINDINGS", "", Kind::Action, 10});
-            out.push_back({"STEERING SETUP", "", Kind::Action, 11});
+            out.push_back({"", "", Kind::Info, 0});
+            // Racing-wheel mode has no gamepad rumble path; keep the controls
+            // visible for reference but non-selectable and grayed out.
+            const Kind rumble_kind =
+                settings_.racing_wheel ? Kind::Info : Kind::Value;
             out.push_back({"RUMBLE", kOnOff[settings_.rumble ? 1 : 0],
-                           Kind::Value, 14});
+                           rumble_kind, 14});
             out.push_back({"RUMBLE STRENGTH", fmt("%d%%", settings_.rumble_strength),
-                           Kind::Value, 15});
-            out.push_back({"TEST RUMBLE", "", Kind::Action, 16});
+                           rumble_kind, 15});
+            out.push_back({"TEST RUMBLE", "",
+                           settings_.racing_wheel ? Kind::Info : Kind::Action,
+                           16});
         }
         break;
+    }
     case 1:
         out.push_back({"COIN A", kCoinage[settings_.coin_a], Kind::Value, 0});
         out.push_back({"COIN B", kCoinage[settings_.coin_b], Kind::Value, 1});
@@ -305,6 +391,9 @@ std::vector<Menu::Item> Menu::items() const {
                        Kind::Value, 4});
         out.push_back({"SPECIAL TOUR MODE", kOnOff[settings_.special_tour ? 1 : 0],
                        Kind::Value, 5});
+        out.push_back({"SAVE SCORE", kOnOff[settings_.save_score ? 1 : 0],
+                       Kind::Value, 7});
+        out.push_back({"CLEAR NVRAM", "", Kind::Action, 8});
         out.push_back({"", "", Kind::Info, 0});
         out.push_back({"FRAME", fmt_ll(frame_), Kind::Info, 0});
         out.push_back({"FPS", fmt_fps(fps_), Kind::Info, 0});
@@ -334,6 +423,13 @@ void Menu::change(int delta) {
     if (sel_ < 0 || sel_ >= (int)list.size()) return;
     const Item &it = list[sel_];
     if (it.kind != Kind::Value) return;
+    if (tab_ == 0 && input_page_ == 1 && it.id >= 200) {
+        const int index = it.id - 200;
+        if (index >= 0 && index < (int)input_devices_.size())
+            settings_.set_device_enabled(input_devices_[index].guid,
+                                         delta > 0);
+        return;
+    }
 
     switch (tab_) {
     case 0:
@@ -453,6 +549,7 @@ void Menu::change(int delta) {
         else if (it.id == 6)
             settings_.tour_start_course =
                 (settings_.tour_start_course + (delta > 0 ? 1 : 4)) % 5;
+        else if (it.id == 7) settings_.save_score = delta > 0;
         break;
     default:
         break;
@@ -465,6 +562,15 @@ void Menu::activate() {
     if (sel_ < 0 || sel_ >= (int)list.size()) return;
     const Item &it = list[sel_];
     if (it.kind != Kind::Value) return;
+    if (tab_ == 0 && input_page_ == 1 && it.id >= 200) {
+        const int index = it.id - 200;
+        if (index >= 0 && index < (int)input_devices_.size()) {
+            const std::string &guid = input_devices_[index].guid;
+            settings_.set_device_enabled(guid,
+                                         !settings_.device_enabled(guid));
+        }
+        return;
+    }
 
     // Toggles flip; everything else advances one step.
     const bool toggle = (tab_ == 0 && (it.id == 5 || it.id == 12 || it.id == 13 ||
@@ -476,7 +582,8 @@ void Menu::activate() {
                         (tab_ == 3 && (it.id == 7 || it.id == 8)) ||
                         (tab_ == 4 && mixer_page_ == 1 && it.id == 24) ||
                         (tab_ == 4 && mixer_page_ == 2 && it.id == 40) ||
-                        (tab_ == 5 && (it.id == 3 || it.id == 4 || it.id == 5));
+                        (tab_ == 5 &&
+                         (it.id == 3 || it.id == 4 || it.id == 5 || it.id == 7));
     if (toggle) {
         if (tab_ == 0 && it.id == 5) settings_.push_start = !settings_.push_start;
         else if (tab_ == 0 && it.id == 12)
@@ -500,6 +607,7 @@ void Menu::activate() {
         else if (tab_ == 5 && it.id == 3) settings_.run_in_menu = !settings_.run_in_menu;
         else if (tab_ == 5 && it.id == 4) settings_.autoplay = !settings_.autoplay;
         else if (tab_ == 5 && it.id == 5) settings_.special_tour = !settings_.special_tour;
+        else if (tab_ == 5 && it.id == 7) settings_.save_score = !settings_.save_score;
         else if (tab_ == 4 && it.id == 24)
             settings_.chorus_enabled = !settings_.chorus_enabled;
         else if (tab_ == 4 && it.id == 40)
@@ -511,6 +619,15 @@ void Menu::activate() {
 
 MenuResult Menu::key(MenuKey k) {
     MenuResult r;
+    if (confirm_clear_) {
+        if (k == MenuKey::Enter) {
+            confirm_clear_ = false;
+            r.clear_nvram = true;
+        } else if (k == MenuKey::Back) {
+            confirm_clear_ = false;
+        }
+        return r;
+    }
     if (binding_ >= 0) {
         if (k == MenuKey::Back) binding_ = -1;
         return r;
@@ -583,16 +700,17 @@ MenuResult Menu::key(MenuKey k) {
             if (id == 0) r.reset = true;
             else if (id == 1) r.close = true;
             else if (id == 2) r.quit = true;
+            else if (id == 8 && tab_ == 5) confirm_clear_ = true;
             else if (id == 10 && tab_ == 0) {
                 input_page_ = 1;
                 sel_ = 0;
             } else if (id == 11 && tab_ == 0) {
-                input_page_ = 2;
+                input_page_ = 3;
                 sel_ = 0;
-            } else if (tab_ == 0 && input_page_ == 1 &&
+            } else if (tab_ == 0 && input_page_ >= 2 &&
                        ((id >= 100 && id <= 106) || (id >= 120 && id <= 122))) {
-                binding_ = id;
-            } else if (tab_ == 0 && input_page_ == 1 && id == 110) {
+                if (!list[sel_].disabled) binding_ = id;
+            } else if (tab_ == 0 && input_page_ == 2 && id == 110) {
                 settings_.reset_gamepad();
             } else if (tab_ == 0 && input_page_ == 1 && id == 111) {
                 input_page_ = 0;
@@ -629,6 +747,11 @@ MenuResult Menu::key(MenuKey k) {
         break;
     }
     case MenuKey::TabPrev:
+        if (tab_ == 0 && input_page_ != 0) {
+            input_page_ = (input_page_ == 1) ? 4 : input_page_ - 1;
+            sel_ = 0;
+            break;
+        }
         if (mixer_mode_)
             tab_ = (tab_ == 3) ? 4 : 3;
         else
@@ -640,6 +763,11 @@ MenuResult Menu::key(MenuKey k) {
         audio_page_ = (mixer_mode_ && tab_ == 3) ? 1 : 0;
         break;
     case MenuKey::TabNext:
+        if (tab_ == 0 && input_page_ != 0) {
+            input_page_ = (input_page_ == 4) ? 1 : input_page_ + 1;
+            sel_ = 0;
+            break;
+        }
         if (mixer_mode_)
             tab_ = (tab_ == 3) ? 4 : 3;
         else
@@ -667,6 +795,13 @@ MenuResult Menu::key(MenuKey k) {
             sel_ = 0;
         } else {
             r.close = true;
+        }
+        break;
+    case MenuKey::Delete:
+        if (tab_ == 0 && input_page_ >= 2) {
+            const std::vector<Item> list = items();
+            if (sel_ >= 0 && sel_ < (int)list.size())
+                clear_binding(list[sel_].id);
         }
         break;
     case MenuKey::Plus:
@@ -722,16 +857,55 @@ MenuResult Menu::key(MenuKey k) {
         mixer_page_ = 0;
         audio_page_ = 0;
         input_page_ = 0;
+        confirm_clear_ = false;
     }
     return r;
 }
 
-void Menu::bind_button(int button) {
+void Menu::clear_binding(int id) {
+    int action = -1;
+    if (id >= 100 && id <= 106)
+        action = id - 100;
+    else if (id >= 120 && id <= 122)
+        action = id - 113;
+    else
+        return;
+    settings_.pad_device[action].clear();
+    settings_.pad_device_name[action].clear();
+    settings_.pad_raw[action] = 0;
+    switch (id) {
+    case 100: settings_.pad_steer_left = -1; break;
+    case 101: settings_.pad_steer_right = -1; break;
+    case 102: settings_.pad_gas = -1; break;
+    case 103: settings_.pad_brake = -1; break;
+    case 104: settings_.pad_gear = -1; break;
+    case 105: settings_.pad_start = -1; break;
+    case 106: settings_.pad_coin = -1; break;
+    case 120: settings_.pad_steer_axis = -1; break;
+    case 121:
+        settings_.pad_gas_axis = -1;
+        settings_.pad_gas_axis_invert = false;
+        break;
+    case 122:
+        settings_.pad_brake_axis = -1;
+        settings_.pad_brake_axis_invert = false;
+        break;
+    default: break;
+    }
+}
+
+void Menu::bind_button(int button, const std::string &device, bool raw,
+                       const std::string &device_name) {
     if (binding_ < 100 || binding_ > 106) return;
-    if (button < 0 || button >= kPadButtonCount) {
+    const int max = raw ? 127 : kPadButtonCount;
+    if (button < 0 || button >= max) {
         binding_ = -1;
         return;
     }
+    const int action = binding_ - 100;
+    settings_.pad_device[action] = device;
+    settings_.pad_device_name[action] = device_name;
+    settings_.pad_raw[action] = raw ? 1 : 0;
     switch (binding_) {
     case 100: settings_.pad_steer_left = button; break;
     case 101: settings_.pad_steer_right = button; break;
@@ -745,12 +919,18 @@ void Menu::bind_button(int button) {
     binding_ = -1;
 }
 
-void Menu::bind_axis(int axis, int value) {
+void Menu::bind_axis(int axis, int value, const std::string &device, bool raw,
+                     const std::string &device_name) {
     if (binding_ < 120 || binding_ > 122) return;
-    if (axis < 0 || axis >= kPadAxisCount) {
+    const int max = raw ? 127 : kPadAxisCount;
+    if (axis < 0 || axis >= max) {
         binding_ = -1;
         return;
     }
+    const int action = binding_ - 113;
+    settings_.pad_device[action] = device;
+    settings_.pad_device_name[action] = device_name;
+    settings_.pad_raw[action] = raw ? 1 : 0;
     switch (binding_) {
     case 120:
         settings_.pad_steer_axis = axis;

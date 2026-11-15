@@ -105,15 +105,23 @@ reuse that cache. The release is portable and needs no installer.
 Press **Tab** to open the menu. Use Up/Down to select, Left/Right to change a
 value, Q/E for the previous/next page, Enter to confirm, and Backspace to go
 back. **Run in Background** is on by default; turn it off in System to pause
-the game and audio behind the menu.
+the game and audio behind the menu. **Save Score** in System persists the
+arcade battery RAM to `nvram/pdrift/backupram` and the high-score ranking table
+to `nvram/pdrift/hiscore`; turn it off to leave the saved files untouched.
+**Clear NVRAM** clears the saved battery RAM and high-score table after a
+confirmation and resets the game.
 
-Use **Controls > Controller Bindings** to remap buttons and axes. **Steering
-Setup** contains the steering/pedal dead zones, digital and analog steering
-rates, centre rate and rebound. **Racing Wheel** uses the selected wheel axis
+Use **Controls > Controller Bindings** to remap inputs. It opens a sub-tabbed
+editor for **Devices**, **Buttons**, **Steering** and **Pedals**; use Q/E to
+switch sub-tabs. The editor accepts any SDL joystick, not only XInput
+controllers, so a separate wheel, pedal set and shifter can each be assigned
+to their own action. Enable or disable detected devices individually, then
+move the control you want when prompted; the device is remembered. Press
+**Delete** on an assignment to clear it. The Steering and Pedals pages show
+live input views while you tune their dead zones and rates. The **Racing
+Wheel** toggle is on the Steering subtab and uses the selected wheel axis
 directly. Enable **Automatic Gearbox** to shift into high gear at 160 km/h and
 back down below it.
-
-
 
 ## Video
 
@@ -132,22 +140,16 @@ stay fine instead of becoming thick bands. The settings menu stays crisp,
 except while you are adjusting the scanline controls, when the effect is shown
 for live preview.
 
-### Force feedback
+### Feel the power of the drift! (Experimental Force Feedback)
 
-Controllers with rumble motors get a rhythmic key-hit and two vroom-vroom
-bursts through the stage introduction, cornering feedback that follows the
-game's actual road rotation
-rather than raw stick input, and a high-frequency-led impact when you hit a wall
-or car. Cornering uses the small motor for tire/slip feedback that rises and
-falls with the throttle, while the heavy motor adds a gently breathing grip
-texture. Lifting off and getting back on the throttle in a corner gives a small
-extra kick as the pedal reaches full travel, and braking in a corner speeds up
-the small-motor pulse for a tire-squeal feel. A full-throttle launch adds a
-long high-motor burnout ramp, and any active rumble trails off over 1.5 seconds
-when a race ends. There is no idle
-rumble. **Rumble** and **Rumble Strength** are on the Controls page; **Test
-Rumble** pulses both motors at the current Rumble Strength so you can check the
-controller without starting a race.
+Custom-tuned dual-motor rumble can be turned on for supported gamepads,
+creating a physical connection to the car that you can feel through your hands.
+
+Turn on **RUMBLE** in Controls, set **RUMBLE STRENGTH** to taste (50% by
+default), and use **TEST RUMBLE** to feel it before the lights go out. Gamepad rumble support varies, so
+this one is experimental. If your pad has motors, it is the closest thing to
+sitting in the cabinet without building one. Game rumble is disabled while
+**Racing Wheel** is on.
 
 ### Audio
 
@@ -239,6 +241,15 @@ For a development run:
 python tools\prepare_rom.py roms\pdrift.zip --out work\roms
 build\LikeTheWind.exe --rom work\roms --play
 ```
+
+To exercise multiple input devices without physical hardware:
+
+```powershell
+build\LikeTheWind.exe --inputdevicetest
+```
+
+This attaches a virtual wheel, pedal set, shifter, and game controller and
+checks device discovery, per-device assignments, disabling, and raw binding.
 
 To record sound commands and game state while playing:
 

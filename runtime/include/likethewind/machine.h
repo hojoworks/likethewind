@@ -43,6 +43,18 @@ public:
 
     bool load_roms(const std::string &dir, std::string &error);
     bool load_selftest(const std::string &path, std::string &error);
+    bool load_nvram(const std::string &path);
+    bool save_nvram(const std::string &path) const;
+
+    // Power Drift keeps the visible ranking table in sub Y local RAM. The
+    // battery RAM only holds the course records, so persist this table too.
+    static constexpr size_t kScoreTableOffset = 0xFA00;
+    static constexpr size_t kScoreTableSize = 0x178;
+    bool load_scores(const std::string &path);
+    bool save_scores(const std::string &path) const;
+    void capture_scores();
+    void restore_scores();
+    void clear_nvram();
     void set_code(int cpu, const ng_func_entry_t *table, size_t count);
     void clear_code(int cpu) { fn_[cpu].assign(fn_[cpu].size(), nullptr); }
     ng_func_t function_at(int cpu, uint32_t address) const {
@@ -222,6 +234,9 @@ private:
                                     uint8_t sample);
     std::vector<ng_func_t> fn_[CPU_COUNT];
     bool faulted_ = false;
+    std::array<uint8_t, kScoreTableSize> score_table_{};
+    bool scores_valid_ = false;
+    bool score_table_ready() const;
 
     uint64_t coverage_dispatches_ = 0;
     uint64_t coverage_translated_ = 0;

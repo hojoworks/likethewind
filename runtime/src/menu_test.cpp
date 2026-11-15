@@ -13,6 +13,8 @@
 
 using namespace likethewind;
 
+static const PadState kNoPad;
+
 int inputtest() {
     Machine machine;
     Settings settings;
@@ -25,7 +27,7 @@ int inputtest() {
         machine.shared[0xE09D] = 8;
         machine.in_wheel = (uint8_t)wheel;
         keys[key] = 1;
-        apply_input(machine, keys, nullptr, gear, prev_gear, state, settings,
+        apply_input(machine, keys, kNoPad, gear, prev_gear, state, settings,
                     false);
         return (int)machine.in_wheel;
     };
@@ -45,11 +47,11 @@ int inputtest() {
     auto entry_step = [&](SDL_Scancode key) {
         std::fill(keys, keys + SDL_NUM_SCANCODES, 0);
         keys[key] = 1;
-        apply_input(entry_machine, keys, nullptr, gear, prev_gear, entry_state,
+        apply_input(entry_machine, keys, kNoPad, gear, prev_gear, entry_state,
                     settings, false);
         const int result = (int)entry_machine.in_wheel;
         std::fill(keys, keys + SDL_NUM_SCANCODES, 0);
-        apply_input(entry_machine, keys, nullptr, gear, prev_gear, entry_state,
+        apply_input(entry_machine, keys, kNoPad, gear, prev_gear, entry_state,
                     settings, false);
         return result;
     };
@@ -81,33 +83,35 @@ int menutest() {
         if (tab == 0) {
             // Exercise PUSH START and RACING WHEEL, then bind and reset a pad
             // button.
-            menu.key(MenuKey::Right);
-            menu.key(MenuKey::Down);    // RACING WHEEL
+            menu.key(MenuKey::Right);   // PUSH START
+            menu.set_selection(2);      // CONTROLLER BINDINGS
+            menu.key(MenuKey::Enter);   // devices subtab
+            menu.key(MenuKey::TabNext); // buttons
+            menu.key(MenuKey::TabNext); // steering
+            menu.set_selection(0);      // RACING WHEEL
             menu.key(MenuKey::Right);
             if (!settings.racing_wheel) gamepad_binding_ok = false;
             menu.key(MenuKey::Left);    // back to normal gamepad mode
-            menu.key(MenuKey::Down);    // CONTROLLER BINDINGS
-            menu.key(MenuKey::Enter);
+            menu.key(MenuKey::TabPrev); // steering -> buttons
+            menu.set_selection(0);      // STEER LEFT
             menu.key(MenuKey::Enter);
             menu.bind_button(2);   // SDL_CONTROLLER_BUTTON_X
             if (settings.pad_steer_left != 2) gamepad_binding_ok = false;
-            for (int i = 0; i < 11; ++i) menu.key(MenuKey::Down);
-            menu.key(MenuKey::Enter);   // RESET DEFAULTS
+            menu.set_selection(7);      // RESET ALL BINDINGS
+            menu.key(MenuKey::Enter);
             if (settings.pad_steer_left != 13) gamepad_binding_ok = false;
-            menu.key(MenuKey::Back);
-            for (int i = 0; i < 3; ++i) menu.key(MenuKey::Down);
-            menu.key(MenuKey::Enter);   // STEERING SETUP
-            menu.key(MenuKey::Down);    // DIGITAL STEER RATE
+            menu.key(MenuKey::TabNext); // buttons -> steering
+            menu.set_selection(5);      // DIGITAL RATE
             menu.key(MenuKey::Right);
             if (settings.steer_rate != 9) steering_setup_ok = false;
-            menu.key(MenuKey::Down);    // ANALOG STEER RATE
+            menu.set_selection(6);      // ANALOG RATE
             menu.key(MenuKey::Right);
             if (settings.pad_steer_rate != 9) steering_setup_ok = false;
-            for (int i = 0; i < 3; ++i) menu.key(MenuKey::Down);
+            menu.set_selection(9);      // REBOUND SPEED
             menu.key(MenuKey::Right);
             if (settings.steer_rebound_speed != 6) steering_setup_ok = false;
-            menu.key(MenuKey::Back);
-            for (int i = 0; i < 5; ++i) menu.key(MenuKey::Down);
+            menu.key(MenuKey::Back);    // back to controls
+            for (int i = 0; i < 3; ++i) menu.key(MenuKey::Down);
             menu.key(MenuKey::Left);    // RUMBLE off
             menu.key(MenuKey::Down);    // RUMBLE STRENGTH
             menu.key(MenuKey::Left);
@@ -202,8 +206,10 @@ int menutest() {
         Settings setup_settings;
         Menu setup_menu(setup_settings);
         setup_menu.toggle();
-        for (int i = 0; i < 3; ++i) setup_menu.key(MenuKey::Down);
+        setup_menu.set_selection(2);   // CONTROLLER BINDINGS
         setup_menu.key(MenuKey::Enter);
+        setup_menu.key(MenuKey::TabNext); // buttons
+        setup_menu.key(MenuKey::TabNext); // steering
         setup_menu.set_steer(16000, 0xA0);
         std::fill(px.begin(), px.end(), 0xFF000000u);
         setup_menu.draw(px.data(), Machine::kVisibleWidth, Machine::kVisibleLines);
@@ -243,6 +249,11 @@ int menutest() {
     }
     std::printf("menutest: wrote work/menu_sfx.ppm\n");
 
+    settings.pad_device[PadBindGasAxis] = "test-guid";
+    settings.pad_device_name[PadBindGasAxis] = "Test Pedals";
+    settings.pad_raw[PadBindGasAxis] = 1;
+    settings.pad_gas_axis = 7;
+    settings.set_device_enabled("test-disabled-device", false);
     settings.save("work/menu_settings.cfg");
     Settings loaded;
     const bool loaded_ok = loaded.load("work/menu_settings.cfg");
@@ -265,7 +276,17 @@ int menutest() {
         loaded.reverb_predelay != settings.reverb_predelay ||
         loaded.reverb_mix != settings.reverb_mix)
         mixer_roundtrip = false;
-    const bool roundtrip = loaded_ok &&
+    const bool raw_binding_roundtrip =
+        loaded.pad_device[PadBindGasAxis] ==
+            settings.pad_device[PadBindGasAxis] &&
+        loaded.pad_device_name[PadBindGasAxis] ==
+            settings.pad_device_name[PadBindGasAxis] &&
+        loaded.pad_raw[PadBindGasAxis] == settings.pad_raw[PadBindGasAxis] &&
+        loaded.pad_gas_axis == settings.pad_gas_axis &&
+        !loaded.device_enabled("test-disabled-device");
+    std::printf("menutest: raw binding round-trip %s\n",
+                raw_binding_roundtrip ? "PASS" : "FAIL");
+    const bool roundtrip = loaded_ok && raw_binding_roundtrip &&
                            loaded.dip_a() == settings.dip_a() &&
                            loaded.dip_b() == settings.dip_b() &&
                            loaded.volume == settings.volume &&
@@ -282,6 +303,14 @@ int menutest() {
                            loaded.frame_rate == settings.frame_rate &&
                            loaded.audio_preset == settings.audio_preset &&
                            loaded.run_in_menu == settings.run_in_menu &&
+                           loaded.save_score == settings.save_score &&
+                           loaded.pad_device[PadBindGasAxis] ==
+                               settings.pad_device[PadBindGasAxis] &&
+                           loaded.pad_device_name[PadBindGasAxis] ==
+                               settings.pad_device_name[PadBindGasAxis] &&
+                           loaded.pad_raw[PadBindGasAxis] ==
+                               settings.pad_raw[PadBindGasAxis] &&
+                           loaded.pad_gas_axis == settings.pad_gas_axis &&
                            loaded.chorus_enabled == settings.chorus_enabled &&
                            loaded.chorus_rate == settings.chorus_rate &&
                            loaded.chorus_depth == settings.chorus_depth &&
@@ -318,16 +347,56 @@ int menutest() {
         Settings axis_settings;
         Menu axis_menu(axis_settings);
         axis_menu.toggle();
-        axis_menu.key(MenuKey::Down);
-        axis_menu.key(MenuKey::Down);    // CONTROLLER BINDINGS
+        axis_menu.set_selection(2);      // CONTROLLER BINDINGS
+        axis_menu.key(MenuKey::Enter);   // devices subtab
+        axis_menu.key(MenuKey::TabPrev); // pedals subtab
+        axis_menu.set_selection(0);      // GAS AXIS
         axis_menu.key(MenuKey::Enter);
-        for (int i = 0; i < 4; ++i) axis_menu.key(MenuKey::Down);
-        axis_menu.key(MenuKey::Enter);   // GAS AXIS
         axis_menu.bind_axis(1, -20000);  // left stick Y, negative direction
         const bool axis_ok = axis_settings.pad_gas_axis == 1 &&
                              axis_settings.pad_gas_axis_invert;
         std::printf("menutest: axis bindings %s\n",
                     axis_ok ? "PASS" : "FAIL");
+    }
+    {
+        Settings device_settings;
+        Menu device_menu(device_settings);
+        device_menu.set_input_devices({
+            {"guid-wheel", "Simagic Wheel", false},
+            {"guid-pad", "Xbox Pad", true},
+        });
+        device_menu.toggle();
+        device_menu.set_selection(2);   // CONTROLLER BINDINGS
+        device_menu.key(MenuKey::Enter);
+        device_menu.set_selection(0);   // first detected device
+        device_menu.key(MenuKey::Enter);
+        const bool disabled = !device_settings.device_enabled("guid-wheel");
+        device_menu.key(MenuKey::Enter);
+        const bool enabled = device_settings.device_enabled("guid-wheel");
+        std::printf("menutest: device enable/disable %s\n",
+                    disabled && enabled ? "PASS" : "FAIL");
+    }
+    {
+        Settings delete_settings;
+        delete_settings.pad_device[PadBindGasAxis] = "guid-pedals";
+        delete_settings.pad_device_name[PadBindGasAxis] = "Pedals";
+        delete_settings.pad_raw[PadBindGasAxis] = 1;
+        delete_settings.pad_gas_axis = 3;
+        Menu delete_menu(delete_settings);
+        delete_menu.toggle();
+        delete_menu.set_selection(2);   // CONTROLLER BINDINGS
+        delete_menu.key(MenuKey::Enter);
+        delete_menu.key(MenuKey::TabPrev); // pedals subtab
+        delete_menu.set_selection(0);   // GAS AXIS
+        delete_menu.key(MenuKey::Enter); // enter capture
+        delete_menu.key(MenuKey::Back);  // cancel capture
+        delete_menu.key(MenuKey::Delete);
+        const bool cleared =
+            delete_settings.pad_gas_axis == -1 &&
+            delete_settings.pad_device[PadBindGasAxis].empty() &&
+            delete_settings.pad_raw[PadBindGasAxis] == 0;
+        std::printf("menutest: clear assignment %s\n",
+                    cleared ? "PASS" : "FAIL");
     }
     {
         Settings monitor_settings;
@@ -347,6 +416,32 @@ int menutest() {
                     monitor_ok ? "PASS" : "FAIL");
     }
     {
+        Settings wheel_settings;
+        wheel_settings.racing_wheel = true;
+        wheel_settings.rumble_strength = 50;
+        Menu wheel_menu(wheel_settings);
+        wheel_menu.toggle();
+        wheel_menu.set_selection(5);   // RUMBLE STRENGTH (grayed in wheel mode)
+        wheel_menu.key(MenuKey::Right);
+        const MenuResult rumble_result = wheel_menu.key(MenuKey::Enter);
+        const bool wheel_ok = wheel_settings.rumble_strength == 50 &&
+                              !rumble_result.rumble_test;
+        std::printf("menutest: wheel-mode rumble disabled %s\n",
+                    wheel_ok ? "PASS" : "FAIL");
+    }
+    {
+        Settings clear_settings;
+        Menu clear_menu(clear_settings);
+        clear_menu.toggle();
+        for (int i = 0; i < 5; ++i) clear_menu.key(MenuKey::TabNext);
+        clear_menu.set_selection(7);   // CLEAR NVRAM
+        const MenuResult first = clear_menu.key(MenuKey::Enter);
+        const MenuResult second = clear_menu.key(MenuKey::Enter);
+        const bool clear_ok = !first.clear_nvram && second.clear_nvram;
+        std::printf("menutest: clear nvram confirmation %s\n",
+                    clear_ok ? "PASS" : "FAIL");
+    }
+    {
         Machine course_machine;
         Settings course_settings;
         SteeringState course_state;
@@ -356,35 +451,35 @@ int menutest() {
         course_machine.in_wheel = 0x80;
         keys[SDL_SCANCODE_LEFT] = 1;
         bool gear = false, prev_gear = false;
-        apply_input(course_machine, keys, nullptr, gear, prev_gear,
+        apply_input(course_machine, keys, kNoPad, gear, prev_gear,
                     course_state, course_settings, false);
         const bool one_step = course_machine.in_wheel == 0x60;
         keys[SDL_SCANCODE_LEFT] = 0;
-        apply_input(course_machine, keys, nullptr, gear, prev_gear,
+        apply_input(course_machine, keys, kNoPad, gear, prev_gear,
                     course_state, course_settings, false);
         keys[SDL_SCANCODE_LEFT] = 1;
-        apply_input(course_machine, keys, nullptr, gear, prev_gear,
+        apply_input(course_machine, keys, kNoPad, gear, prev_gear,
                     course_state, course_settings, false);
         const bool two_steps = course_machine.in_wheel == 0x40;
         keys[SDL_SCANCODE_LEFT] = 0;
-        apply_input(course_machine, keys, nullptr, gear, prev_gear,
+        apply_input(course_machine, keys, kNoPad, gear, prev_gear,
                     course_state, course_settings, false);
 
         course_machine.in_wheel = 0x80;
         course_state = {};
         keys[SDL_SCANCODE_RIGHT] = 1;
-        apply_input(course_machine, keys, nullptr, gear, prev_gear,
+        apply_input(course_machine, keys, kNoPad, gear, prev_gear,
                     course_state, course_settings, false);
         const bool one_step_right = course_machine.in_wheel == 0xA0;
         keys[SDL_SCANCODE_RIGHT] = 0;
-        apply_input(course_machine, keys, nullptr, gear, prev_gear,
+        apply_input(course_machine, keys, kNoPad, gear, prev_gear,
                     course_state, course_settings, false);
 
         course_settings.racing_wheel = true;
         course_machine.in_wheel = 0x80;
         course_state = {};
         keys[SDL_SCANCODE_LEFT] = 1;
-        apply_input(course_machine, keys, nullptr, gear, prev_gear,
+        apply_input(course_machine, keys, kNoPad, gear, prev_gear,
                     course_state, course_settings, false);
         const bool no_wheel_nudge = course_machine.in_wheel == 0x80;
         std::printf("menutest: course-select one press per course %s\n",
@@ -404,21 +499,21 @@ int menutest() {
         entry_machine.in_wheel = 0x80;
         bool gear = false, prev_gear = false;
         keys[SDL_SCANCODE_RIGHT] = 1;
-        apply_input(entry_machine, keys, nullptr, gear, prev_gear,
+        apply_input(entry_machine, keys, kNoPad, gear, prev_gear,
                     entry_state, entry_settings, false);
         const bool carousel_right = entry_machine.in_wheel == 0x86;
         keys[SDL_SCANCODE_RIGHT] = 0;
-        apply_input(entry_machine, keys, nullptr, gear, prev_gear,
+        apply_input(entry_machine, keys, kNoPad, gear, prev_gear,
                     entry_state, entry_settings, false);
         keys[SDL_SCANCODE_RIGHT] = 1;
-        apply_input(entry_machine, keys, nullptr, gear, prev_gear,
+        apply_input(entry_machine, keys, kNoPad, gear, prev_gear,
                     entry_state, entry_settings, false);
         const bool carousel_next = entry_machine.in_wheel == 0x89;
         keys[SDL_SCANCODE_RIGHT] = 0;
-        apply_input(entry_machine, keys, nullptr, gear, prev_gear,
+        apply_input(entry_machine, keys, kNoPad, gear, prev_gear,
                     entry_state, entry_settings, false);
         keys[SDL_SCANCODE_LEFT] = 1;
-        apply_input(entry_machine, keys, nullptr, gear, prev_gear,
+        apply_input(entry_machine, keys, kNoPad, gear, prev_gear,
                     entry_state, entry_settings, false);
         const bool carousel_back = entry_machine.in_wheel == 0x86;
         std::printf("menutest: name-entry carousel %s\n",
@@ -570,7 +665,7 @@ int menutest() {
     Menu st_menu(st_settings);
     st_menu.toggle();
     for (int i = 0; i < 3; ++i) st_menu.key(MenuKey::TabNext);   // AUDIO
-    for (int i = 0; i < 6; ++i) st_menu.key(MenuKey::Down);      // SOUND TEST
+    st_menu.set_selection(8);                                    // SOUND TEST
     st_menu.key(MenuKey::Enter);
     const bool st_open = st_menu.sound_test();
     for (int i = 0; i < 4; ++i) st_menu.key(MenuKey::Down);      // POKER FACE (94H)

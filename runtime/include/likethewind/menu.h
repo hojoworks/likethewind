@@ -30,12 +30,20 @@ enum class MenuKey {
     Minus,
     Solo,
     SendSelect,
+    Delete,
+};
+
+struct MenuInputDevice {
+    std::string guid;
+    std::string name;
+    bool game_controller = false;
 };
 
 struct MenuResult {
     bool close = false;
     bool quit = false;
     bool reset = false;
+    bool clear_nvram = false;
     bool rumble_test = false;
     int sound_cmd = -1;   // sound-board command requested by the sound test
 };
@@ -70,6 +78,7 @@ public:
             audio_page_ = 0;
             input_page_ = 0;
             binding_ = -1;
+            confirm_clear_ = false;
         }
     }
     void close() {
@@ -79,6 +88,7 @@ public:
         audio_page_ = 0;
         input_page_ = 0;
         binding_ = -1;
+        confirm_clear_ = false;
     }
 
     MenuResult key(MenuKey k);
@@ -122,17 +132,26 @@ public:
         coverage_routine_total_ = total_routines;
     }
     void set_mix_track(const std::string &name) { mix_track_ = name; }
+    void set_input_devices(const std::vector<MenuInputDevice> &devices) {
+        input_devices_ = devices;
+    }
     void set_selection(int i) { sel_ = i; }
     void set_steer(int value, int wheel) {
         steer_value_ = value;
         wheel_ = wheel;
     }
+    void set_pedals(int gas, int brake) {
+        gas_value_ = gas;
+        brake_value_ = brake;
+    }
 
     // Controller binding capture: the host feeds the next input here.
     int binding_action() const { return binding_; }
     bool binding_axis() const { return binding_ >= 120; }
-    void bind_button(int button);
-    void bind_axis(int axis, int value);
+    void bind_button(int button, const std::string &device = "",
+                     bool raw = false, const std::string &device_name = "");
+    void bind_axis(int axis, int value, const std::string &device = "",
+                   bool raw = false, const std::string &device_name = "");
     void cancel_binding() { binding_ = -1; }
     void set_binding_waiting(bool waiting) { binding_waiting_ = waiting; }
 
@@ -144,16 +163,19 @@ private:
         Kind kind = Kind::Info;
         int id = 0;
         int amount = -1;   // 0..100 for volume sliders
+        bool disabled = false;
     };
 
     std::vector<Item> items() const;
     void change(int delta);
     void activate();
+    void clear_binding(int id);
     void draw_mixer(uint32_t *pixels, int width, int height, int px0, int py0) const;
     void draw_chorus(uint32_t *pixels, int width, int height, int px0, int py0) const;
     void draw_reverb(uint32_t *pixels, int width, int height, int px0, int py0) const;
     void draw_controls(uint32_t *pixels, int width, int height, int px0, int py0) const;
     void draw_steering(uint32_t *pixels, int width, int height, int px0, int py0) const;
+    void draw_pedals(uint32_t *pixels, int width, int height, int px0, int py0) const;
     void draw_sfx(uint32_t *pixels, int width, int height, int px0, int py0) const;
 
     Settings &settings_;
@@ -166,8 +188,11 @@ private:
     int input_page_ = 0;   // 0 input settings, 1 controller bindings, 2 steering
     int binding_ = -1;     // action awaiting a controller button, or -1
     bool binding_waiting_ = false; // release held buttons before capturing
+    bool confirm_clear_ = false;   // CLEAR NVRAM confirmation is open
     int steer_value_ = 0;  // live value of the selected steering axis
     int wheel_ = 0x80;     // live steering value, 0x20..0xE0
+    int gas_value_ = 0;    // live pedal values, 0..255
+    int brake_value_ = 0;
     int send_focus_ = 0;   // 0 chorus send, 1 reverb send
     float ym_level_[8] = {};
     float pcm_level_[16] = {};
@@ -180,6 +205,7 @@ private:
     int blend_pct_ = 0;
     bool mixer_mode_ = false;
     std::string mix_track_;
+    std::vector<MenuInputDevice> input_devices_;
     uint64_t coverage_fallback_ = 0;
     uint64_t coverage_fallback_pcs_ = 0;
     int coverage_dispatch_pct_ = 0;

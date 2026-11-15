@@ -9,10 +9,30 @@
 #ifndef LIKETHEWIND_SETTINGS_H
 #define LIKETHEWIND_SETTINGS_H
 
+#include <array>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace likethewind {
+
+// Per-binding metadata for the controller page. The existing pad_* fields
+// hold the control number; these arrays remember which physical device and
+// whether the control is a raw joystick button/axis or an SDL game-controller
+// control.
+enum PadBindingIndex : int {
+    PadBindSteerLeft = 0,
+    PadBindSteerRight,
+    PadBindGas,
+    PadBindBrake,
+    PadBindGear,
+    PadBindStart,
+    PadBindCoin,
+    PadBindSteerAxis,
+    PadBindGasAxis,
+    PadBindBrakeAxis,
+    PadBindCount,
+};
 
 struct Settings {
     static constexpr int kChannelMax = 400;   // per-channel mixer headroom
@@ -96,6 +116,7 @@ struct Settings {
     // System
     bool run_in_menu = true;    // keep the game running behind the menu
     bool autoplay = false;      // simple demo driver for watching the mixer
+    bool save_score = true;     // persist NVRAM and high scores when saving settings
 
     // Voice restoration. Emily and Lucy are the two female drivers.
     bool restore_female_voices = true;
@@ -114,7 +135,7 @@ struct Settings {
     int steer_rebound = 10;     // counter-steer pulse after crossing centre
     int steer_rebound_speed = 5; // return speed during the rebound, 1..10
     bool rumble = true;         // force feedback while racing
-    int rumble_strength = 100;  // 0..100
+    int rumble_strength = 50;   // 0..100
 
     // Gamepad button assignments. These are SDL_GameControllerButton values;
     // -1 means unbound.
@@ -133,6 +154,16 @@ struct Settings {
     bool pad_gas_axis_invert = false;
     int pad_brake_axis = 4;        // left trigger
     bool pad_brake_axis_invert = false;
+
+    // Empty device means "the first SDL game controller" for backwards
+    // compatibility. Raw bindings use SDL_Joystick button/axis indices.
+    std::array<std::string, PadBindCount> pad_device{};
+    std::array<std::string, PadBindCount> pad_device_name{};
+    std::array<uint8_t, PadBindCount> pad_raw{};
+    std::vector<std::string> disabled_devices;
+
+    bool device_enabled(const std::string &guid) const;
+    void set_device_enabled(const std::string &guid, bool enabled);
 
     int view_width() const {
         switch (aspect) {

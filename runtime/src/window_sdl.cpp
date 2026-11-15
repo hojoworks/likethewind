@@ -36,6 +36,11 @@ namespace likethewind {
 
 namespace {
 constexpr const char *kSettingsPath = "likethewind-settings.cfg";
+constexpr const char *kNvramPath = "nvram/pdrift/backupram";
+constexpr const char *kScorePath = "nvram/pdrift/hiscore";
+// The game has initialized its default ranking table by this point. Restore
+// the saved table once the boot screen is out of the way.
+constexpr int kScoreRestoreFrame = 120;
 
 uint32_t argb(uint16_t v) {
     uint8_t r = (uint8_t)((((v & 0x0F) << 1) | ((v >> 12) & 1)) * 255 / 31);
@@ -721,6 +726,8 @@ void update_rumble(SDL_GameController *pad, bool supported, const Settings &s,
 bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_settings,
                 bool open_menu) {
     settings.clamp();
+    machine.load_nvram(kNvramPath);
+    machine.load_scores(kScorePath);
     // SDL's Windows Raw Input path can leave Xbox controllers "uncorrelated"
     // for force feedback, which makes SDL_GameControllerRumble fail with
     // "Controller isn't correlated yet". The HIDAPI path supports rumble for
@@ -796,6 +803,7 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
     if (SDL_GameControllerAddMappingsFromFile("gamecontrollerdb.txt") < 0)
         SDL_ClearError();
     SDL_GameControllerEventState(SDL_ENABLE);
+    SDL_JoystickEventState(SDL_ENABLE);
 
     SDL_Window *win = nullptr;
     SDL_Renderer *ren = nullptr;
@@ -1008,29 +1016,26 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         }
     }
 
-    SDL_GameController *pad = nullptr;
-    bool pad_rumble = false;
-    auto refresh_rumble_support = [&]() {
-        pad_rumble = false;
-        if (!pad) return;
-#if SDL_VERSION_ATLEAST(2, 0, 18)
-        pad_rumble = SDL_GameControllerHasRumble(pad) == SDL_TRUE;
-#elif SDL_VERSION_ATLEAST(2, 0, 9)
-        pad_rumble = true;
-#endif
+    InputDevices input;
+    auto publish_input_devices = [&]() {
+        std::vector<MenuInputDevice> list;
+        for (const InputDeviceInfo &info : input.infos())
+            list.push_back({info.guid, info.name, info.game_controller});
+        menu.set_input_devices(list);
     };
-    for (int i = 0; i < SDL_NumJoysticks(); i++) {
-        if (SDL_IsGameController(i)) { pad = SDL_GameControllerOpen(i); break; }
-    }
+    input.open_all();
+    publish_input_devices();
+    SDL_GameController *pad = input.primary_controller();
+    bool pad_rumble = input.rumble_supported();
     if (pad) {
-        std::fprintf(stderr, "[input] controller: %s\n", SDL_GameControllerName(pad));
-    } else {
-        std::fprintf(stderr, "[input] no SDL game controller found (keyboard still works)\n");
+        std::fprintf(stderr, "[input] controller: %s\n",
+                     SDL_GameControllerName(pad));
     }
-    refresh_rumble_support();
     if (pad)
         std::fprintf(stderr, "[input] rumble: %s\n",
                      pad_rumble ? "supported" : "not supported");
+    else
+        std::fprintf(stderr, "[input] no rumble controller (keyboard still works)\n");
 
     const size_t screen_pixels = (size_t)Machine::kRenderWidth * Machine::kVisibleLines;
     std::vector<uint16_t> prev_screen(screen_pixels, 0);
@@ -1121,6 +1126,7 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         tour.last_score_seen = score;
     };
     bool running = true;
+    bool scores_restored = false;
     int frames = 0;
 
     const double frame_time = 1.0 / 60.0;
@@ -1219,7 +1225,13 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
 
     auto save_settings_file = [&]() {
         if (settings.audio_preset == 1) save_mix_for(mix_song);
-        if (save_settings) settings.save(kSettingsPath);
+        if (save_settings) {
+            settings.save(kSettingsPath);
+            if (settings.save_score) {
+                machine.save_nvram(kNvramPath);
+                machine.save_scores(kScorePath);
+            }
+        }
     };
 
     auto queue_audio = [&]() {
@@ -1297,18 +1309,33 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                 sound_test_cmd = 0xFF;
             machine.audio()->sound_latch((uint8_t)r.sound_cmd);
         }
-        if (r.reset) {
-            machine.reset();
+        auto finish_reset = [&](bool restore_saved_scores) {
             machine.dip_a = settings.dip_a();
             machine.dip_b = settings.dip_b();
             if (adev) SDL_ClearQueuedAudio(adev);
             frames = 0;
+            scores_restored = !restore_saved_scores;
             rate_frames = 0;
             rate_start = SDL_GetPerformanceCounter();
             reset_clock();
+        };
+        if (r.reset) {
+            machine.capture_scores();
+            machine.reset();
+            finish_reset(true);
+        }
+        if (r.clear_nvram) {
+            std::error_code ec;
+            std::filesystem::remove(kNvramPath, ec);
+            std::filesystem::remove(kScorePath, ec);
+            machine.clear_nvram();
+            machine.reset();
+            finish_reset(false);
+            menu.close();
         }
         if (r.rumble_test) {
-            if (pad && pad_rumble) {
+            if (pad && pad_rumble && !settings.racing_wheel &&
+                settings.device_enabled(input.primary_guid())) {
                 const int pct = std::clamp(settings.rumble_strength, 0, 100);
                 const Uint16 level =
                     rumble_level(1.0f, settings.rumble_strength);
@@ -1330,13 +1357,8 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
 
     int binding_seen = -1;
     bool binding_release = false;
-    auto any_gamepad_button = [&]() {
-        if (!pad) return false;
-        for (int b = 0; b < SDL_CONTROLLER_BUTTON_MAX; ++b)
-            if (SDL_GameControllerGetButton(pad, (SDL_GameControllerButton)b))
-                return true;
-        return false;
-    };
+    bool input_dirty = false;
+    auto any_gamepad_button = [&]() { return input.any_button(); };
     auto update_binding_state = [&]() {
         const int current = menu.binding_action();
         if (current < 0) {
@@ -1423,24 +1445,50 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                 }
                 if (menu.visible()) {
                     MenuKey k;
-                    if (menu_key_from_sym(sym, k)) handle_menu(menu.key(k));
+                    // A held Enter must not turn the CLEAR NVRAM confirmation
+                    // into a single press.
+                    if (menu_key_from_sym(sym, k) &&
+                        !(k == MenuKey::Enter && e.key.repeat))
+                        handle_menu(menu.key(k));
                     continue;
                 }
             }
             if (e.type == SDL_CONTROLLERAXISMOTION) {
                 if (menu.visible() && menu.binding_axis()) {
-                    if (!binding_release &&
+                    const InputDeviceInfo *dev =
+                        input.find_by_instance(e.caxis.which);
+                    if (dev && settings.device_enabled(dev->guid) && !binding_release &&
                         std::abs(e.caxis.value) >= 12000) {
-                        menu.bind_axis(e.caxis.axis, e.caxis.value);
+                        menu.bind_axis(e.caxis.axis, e.caxis.value, dev->guid,
+                                       false, dev->name);
                         save_settings_file();
                     }
                     continue;
                 }
             }
+            if (e.type == SDL_JOYAXISMOTION) {
+                const InputDeviceInfo *dev =
+                    input.find_by_instance(e.jaxis.which);
+                if (menu.visible() && menu.binding_axis() && dev &&
+                    !dev->game_controller &&
+                    settings.device_enabled(dev->guid)) {
+                    if (!binding_release &&
+                        std::abs(e.jaxis.value) >= 12000) {
+                        menu.bind_axis(e.jaxis.axis, e.jaxis.value, dev->guid,
+                                       true, dev->name);
+                        save_settings_file();
+                    }
+                }
+                continue;
+            }
             if (e.type == SDL_CONTROLLERBUTTONDOWN) {
                 if (menu.visible() && menu.binding_action() >= 0) {
-                    if (!binding_release) {
-                        menu.bind_button(e.cbutton.button);
+                    const InputDeviceInfo *dev =
+                        input.find_by_instance(e.cbutton.which);
+                    if (dev && settings.device_enabled(dev->guid) &&
+                        !binding_release) {
+                        menu.bind_button(e.cbutton.button, dev->guid, false,
+                                         dev->name);
                         save_settings_file();
                     }
                     continue;
@@ -1468,31 +1516,41 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                     }
                 }
             }
+            if (e.type == SDL_JOYBUTTONDOWN) {
+                const InputDeviceInfo *dev =
+                    input.find_by_instance(e.jbutton.which);
+                if (menu.visible() && menu.binding_action() >= 0 && dev &&
+                    !dev->game_controller &&
+                    settings.device_enabled(dev->guid) && !binding_release) {
+                    menu.bind_button(e.jbutton.button, dev->guid, true,
+                                     dev->name);
+                    save_settings_file();
+                }
+                continue;
+            }
             if (menu.visible() && e.type == SDL_CONTROLLERBUTTONDOWN) {
                 MenuKey k;
                 if (menu_key_from_button(e.cbutton.button, k)) handle_menu(menu.key(k));
                 continue;
             }
-            if (e.type == SDL_CONTROLLERDEVICEADDED && !pad) {
-                pad = SDL_GameControllerOpen(e.cdevice.which);
-                if (pad) {
-                    std::fprintf(stderr, "[input] controller added: %s\n",
-                                 SDL_GameControllerName(pad));
-                    refresh_rumble_support();
-                }
-            }
-            if (e.type == SDL_CONTROLLERDEVICEREMOVED && pad &&
-                e.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(pad))) {
-                SDL_GameControllerRumble(pad, 0, 0, 0);
-                SDL_GameControllerClose(pad);
-                pad = nullptr;
-                pad_rumble = false;
-                rumble_state = {};
-                std::fprintf(stderr, "[input] controller removed\n");
+            if (e.type == SDL_JOYDEVICEADDED ||
+                e.type == SDL_JOYDEVICEREMOVED ||
+                e.type == SDL_CONTROLLERDEVICEADDED ||
+                e.type == SDL_CONTROLLERDEVICEREMOVED) {
+                input_dirty = true;
             }
             if (e.type == SDL_DISPLAYEVENT) {
                 menu.set_display_count(std::max(1, SDL_GetNumVideoDisplays()));
             }
+        }
+        if (input_dirty) {
+            if (pad) SDL_GameControllerRumble(pad, 0, 0, 0);
+            rumble_state = {};
+            input.open_all();
+            publish_input_devices();
+            pad = input.primary_controller();
+            pad_rumble = input.rumble_supported();
+            input_dirty = false;
         }
         update_binding_state();
         if (!running) break;
@@ -1535,6 +1593,8 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         sound_test_was_active = sound_test_now;
         sync_song_mix();
 
+        PadState pad_state;
+        read_pad_state(input, settings, pad_state);
         const Uint8 *keys = SDL_GetKeyboardState(nullptr);
         const Uint64 now = SDL_GetPerformanceCounter();
         const bool menu_up = menu.visible();
@@ -1571,8 +1631,8 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         }
 
         while (!paused && accumulator >= frame_time && running) {
-            apply_input(machine, keys, pad, gear, prevGear, steer_state, settings,
-                        menu.visible());
+            apply_input(machine, keys, pad_state, gear, prevGear, steer_state,
+                        settings, menu.visible());
             if (settings.autoplay) {
                 if (!autoplay_was) autoplay_frame = 0;
                 ++autoplay_frame;
@@ -1701,7 +1761,9 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             if (SDL_GetTicks() >= rumble_test_until) {
                 update_rumble(pad, pad_rumble, settings, machine, rumble_state,
                               mode_after == 20, mode_after,
-                              settings.rumble && !menu_up);
+                              settings.rumble && !menu_up &&
+                                  !settings.racing_wheel &&
+                                  settings.device_enabled(input.primary_guid()));
             }
             if (settings.special_tour) {
                 // A board reset returns to the attract loop. Start a fresh
@@ -1827,6 +1889,10 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
 
             accumulator -= frame_time;
             frames++;
+            if (!scores_restored && frames >= kScoreRestoreFrame) {
+                machine.restore_scores();
+                scores_restored = true;
+            }
             rate_frames++;
             if (rate_frames >= 60) {
                 const Uint64 now2 = SDL_GetPerformanceCounter();
@@ -1844,12 +1910,18 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             if (max_frames > 0 && frames >= max_frames) running = false;
         }
         if (menu.visible()) {
-            const int steer_axis_value =
-                controller_axis(pad, settings.pad_steer_axis);
+            const int steer_axis_value = pad_state.steer_axis;
             preview_wheel = update_wheel(preview_wheel, preview_state,
                                          steer_axis_value, false, false,
                                          settings);
             menu.set_steer(steer_axis_value, preview_wheel);
+            menu.set_pedals(
+                pedal_from_signed_axis(pad_state.gas_axis,
+                                       settings.pad_gas_axis_invert,
+                                       settings.pedal_deadzone),
+                pedal_from_signed_axis(pad_state.brake_axis,
+                                       settings.pad_brake_axis_invert,
+                                       settings.pedal_deadzone));
             menu.set_status(machine.frame, measured_fps);
             menu.set_coverage(machine.fallback_steps(), machine.fallback_unique_pcs(),
                               machine.translated_percent(),
@@ -2082,7 +2154,8 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
     if (audio_stream) SDL_FreeAudioStream(audio_stream);
     if (adev) SDL_CloseAudioDevice(adev);
     stop_rumble(pad, rumble_state);
-    if (pad) SDL_GameControllerClose(pad);
+    input.close_all();
+    pad = nullptr;
     if (tex) SDL_DestroyTexture(tex);
     if (ren) SDL_DestroyRenderer(ren);
     if (win) SDL_DestroyWindow(win);

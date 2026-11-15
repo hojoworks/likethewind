@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <utility>
@@ -149,10 +150,115 @@ void Machine::set_reset(int i, bool held) {
     }
 }
 
+bool Machine::load_nvram(const std::string &path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return false;
+    std::memset(subx_backup, 0, sizeof(subx_backup));
+    f.read((char *)subx_backup, (std::streamsize)sizeof(subx_backup));
+    return true;
+}
+
+bool Machine::save_nvram(const std::string &path) const {
+    std::error_code ec;
+    const std::filesystem::path p(path);
+    if (p.has_parent_path())
+        std::filesystem::create_directories(p.parent_path(), ec);
+    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    if (!f) return false;
+    f.write((const char *)subx_backup, (std::streamsize)sizeof(subx_backup));
+    return f.good();
+}
+
+namespace {
+constexpr char kScoreMagic[4] = {'P', 'D', 'H', 'S'};
+constexpr uint32_t kScoreVersion = 1;
+void put_u32(uint8_t *p, uint32_t v) {
+    p[0] = (uint8_t)v;
+    p[1] = (uint8_t)(v >> 8);
+    p[2] = (uint8_t)(v >> 16);
+    p[3] = (uint8_t)(v >> 24);
+}
+uint32_t get_u32(const uint8_t *p) {
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+} // namespace
+
+bool Machine::score_table_ready() const {
+    // The table starts at suby_local+0xFA10, with three name bytes at +0x0E
+    // in each 0x14-byte entry. Before the game boots it is all zeroes.
+    for (size_t i = 0; i < 18; i++) {
+        const uint8_t *name =
+            suby_local + kScoreTableOffset + 0x1E + i * 0x14;
+        if (name[0] || name[1] || name[2]) return true;
+    }
+    return false;
+}
+
+bool Machine::load_scores(const std::string &path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return false;
+    uint8_t header[12] = {};
+    f.read((char *)header, sizeof(header));
+    if (f.gcount() != (std::streamsize)sizeof(header) ||
+        std::memcmp(header, kScoreMagic, sizeof(kScoreMagic)) != 0 ||
+        get_u32(header + 4) != kScoreVersion ||
+        get_u32(header + 8) != kScoreTableSize)
+        return false;
+    std::array<uint8_t, kScoreTableSize> table{};
+    f.read((char *)table.data(), (std::streamsize)table.size());
+    if (f.gcount() != (std::streamsize)table.size()) return false;
+    score_table_ = table;
+    scores_valid_ = true;
+    return true;
+}
+
+bool Machine::save_scores(const std::string &path) const {
+    if (!score_table_ready()) return false;
+    std::error_code ec;
+    const std::filesystem::path p(path);
+    if (p.has_parent_path())
+        std::filesystem::create_directories(p.parent_path(), ec);
+    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    if (!f) return false;
+    uint8_t header[12] = {};
+    std::memcpy(header, kScoreMagic, sizeof(kScoreMagic));
+    put_u32(header + 4, kScoreVersion);
+    put_u32(header + 8, (uint32_t)kScoreTableSize);
+    f.write((const char *)header, sizeof(header));
+    f.write((const char *)suby_local + kScoreTableOffset,
+            (std::streamsize)kScoreTableSize);
+    return f.good();
+}
+
+void Machine::capture_scores() {
+    if (!score_table_ready()) return;
+    std::memcpy(score_table_.data(), suby_local + kScoreTableOffset,
+                kScoreTableSize);
+    scores_valid_ = true;
+}
+
+void Machine::restore_scores() {
+    if (!scores_valid_) return;
+    std::memcpy(suby_local + kScoreTableOffset, score_table_.data(),
+                kScoreTableSize);
+}
+
+void Machine::clear_nvram() {
+    std::memset(subx_backup, 0, sizeof(subx_backup));
+    std::memset(suby_local + kScoreTableOffset, 0, kScoreTableSize);
+    score_table_.fill(0);
+    scores_valid_ = false;
+}
+
 void Machine::reset() {
     g_active_cpu = -1;
     fallback_init();
     build_pages();
+    // The battery-backed RAM survives a board reset. The initial object is
+    // zeroed, and the host loads the saved NVRAM after this first reset.
+    uint8_t saved_backup[sizeof(subx_backup)];
+    std::memcpy(saved_backup, subx_backup, sizeof(subx_backup));
     for (int i = 0; i < CPU_COUNT; i++) {
         Cpu &c = cpus[i];
         c.cycles = 0;
@@ -166,7 +272,7 @@ void Machine::reset() {
     std::memset(shared, 0, sizeof(shared));
     std::memset(main_local, 0, sizeof(main_local));
     std::memset(subx_local, 0, sizeof(subx_local));
-    std::memset(subx_backup, 0, sizeof(subx_backup));
+    std::memcpy(subx_backup, saved_backup, sizeof(subx_backup));
     std::memset(suby_local, 0, sizeof(suby_local));
     std::memset(ysprite, 0, sizeof(ysprite));
     std::memset(bsprite, 0, sizeof(bsprite));
