@@ -185,16 +185,12 @@ bool is_ym_chime_keycode(int ch, uint8_t keycode) {
 }
 
 bool is_ym_sfx_keycode(int ch, uint8_t keycode) {
+    // 0x2C is an effect on channel 6, but Course A also uses it for an
+    // ordinary music note on channel 7. Keep it effect-only on channel 6;
+    // the 45/5E/65 notes are the overtake chime on either channel.
+    if (ch == 6 && keycode == 0x2C) return true;
     if (ch != 6 && ch != 7) return false;
-    switch (keycode) {
-    case 0x2C:
-    case 0x45:
-    case 0x5E:
-    case 0x65:
-        return true;
-    default:
-        return false;
-    }
+    return keycode == 0x45 || keycode == 0x5E || keycode == 0x65;
 }
 
 // 0 = no override, 1 = music, 2 = SFX, 3 = engine. Audio::reset() loads
