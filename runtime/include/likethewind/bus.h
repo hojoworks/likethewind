@@ -76,4 +76,4 @@ static inline uint32_t ng_pop32(void) { uint32_t v = ng_r32(CPU.a[7]); CPU.a[7] 
 }
 #endif
 
-#endif
+#endif // LIKETHEWIND_BUS_H

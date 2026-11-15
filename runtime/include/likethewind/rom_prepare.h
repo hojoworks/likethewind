@@ -1,4 +1,5 @@
-#pragma once
+#ifndef LIKETHEWIND_ROM_PREPARE_H
+#define LIKETHEWIND_ROM_PREPARE_H
 
 #include <string>
 
@@ -20,3 +21,5 @@ RomPrepareResult prepare_release_roms(const std::string &exe_dir);
 std::string executable_directory();
 
 } // namespace likethewind
+
+#endif // LIKETHEWIND_ROM_PREPARE_H

@@ -8,16 +8,16 @@
 
 #include "likethewind/music_tracks.h"
 
+#include "menu_internal.h"
+
 #include <algorithm>
-#include <cctype>
 #include <cstdio>
 
 namespace likethewind {
 
+using namespace menu_internal;
+
 namespace {
-
-
-constexpr int kTabCount = 6;
 
 const char *const kCoinage[16] = {
     "FREE PLAY N/A", "1C/1C 2/3", "1C/1C 4/5", "1C/1C 5/6",
@@ -28,7 +28,6 @@ const char *const kCoinage[16] = {
 const char *const kCabinet[4] = {"UNUSED", "MINI UPRIGHT", "UPRIGHT", "MOVING"};
 const char *const kCredits[4] = {"2/2", "1/1", "3/2", "2/1"};
 const char *const kDifficulty[4] = {"HARDEST", "HARD", "EASY", "NORMAL"};
-const char *const kOnOff[2] = {"OFF", "ON"};
 const char *const kAspect[6] = {"4:3", "16:9", "21:9", "18:9",
                                 "19:9", "20:9"};
 // Display order: keep existing saved aspect values while inserting new ratios.
@@ -45,16 +44,6 @@ const char *const kPadAxes[] = {"LEFT X", "LEFT Y", "RIGHT X",
 
 constexpr int kPadButtonCount = (int)(sizeof(kPadButtons) / sizeof(kPadButtons[0]));
 constexpr int kPadAxisCount = (int)(sizeof(kPadAxes) / sizeof(kPadAxes[0]));
-
-std::string pcm_channel_name(int channel) {
-    return "PCM" + std::to_string(channel + 1);
-}
-
-std::string sfx_channel_name(int channel) {
-    if (channel == 16) return "ANNOUNCER";
-    if (channel == 17) return "PASSING";
-    return "SFX" + std::to_string(channel + 1);
-}
 
 const char *pad_button_name(int button) {
     if (button < 0 || button >= kPadButtonCount) return "UNBOUND";
@@ -82,27 +71,9 @@ std::string pad_binding_display(const Settings &s, int action, int value,
     return name + " " + control;
 }
 
-std::string fmt(const char *f, int v) {
-    char b[64];
-    std::snprintf(b, sizeof(b), f, v);
-    return b;
-}
-
 std::string fmt_ll(long long v) {
     char b[64];
     std::snprintf(b, sizeof(b), "%lld", v);
-    return b;
-}
-
-std::string fmt_fps(double v) {
-    char b[64];
-    std::snprintf(b, sizeof(b), "%.1f", v);
-    return b;
-}
-
-std::string fmt_rate(int tenths) {
-    char b[32];
-    std::snprintf(b, sizeof(b), "%d.%d HZ", tenths / 10, tenths % 10);
     return b;
 }
 
@@ -546,9 +517,6 @@ void Menu::change(int delta) {
         if (it.id == 3) settings_.run_in_menu = delta > 0;
         else if (it.id == 4) settings_.autoplay = delta > 0;
         else if (it.id == 5) settings_.special_tour = delta > 0;
-        else if (it.id == 6)
-            settings_.tour_start_course =
-                (settings_.tour_start_course + (delta > 0 ? 1 : 4)) % 5;
         else if (it.id == 7) settings_.save_score = delta > 0;
         break;
     default:
@@ -704,9 +672,6 @@ MenuResult Menu::key(MenuKey k) {
             else if (id == 10 && tab_ == 0) {
                 input_page_ = 1;
                 sel_ = 0;
-            } else if (id == 11 && tab_ == 0) {
-                input_page_ = 3;
-                sel_ = 0;
             } else if (tab_ == 0 && input_page_ >= 2 &&
                        ((id >= 100 && id <= 106) || (id >= 120 && id <= 122))) {
                 if (!list[sel_].disabled) binding_ = id;
@@ -851,14 +816,7 @@ MenuResult Menu::key(MenuKey k) {
     if (m && sel_ >= m) sel_ = m - 1;
     if (m && sel_ < 0) sel_ = 0;
     if (m && final_items[sel_].kind == Kind::Info) move_selection(+1);
-    if (r.close) {
-        open_ = false;
-        mixer_locked_ = true;
-        mixer_page_ = 0;
-        audio_page_ = 0;
-        input_page_ = 0;
-        confirm_clear_ = false;
-    }
+    if (r.close) close();
     return r;
 }
 
@@ -961,21 +919,5 @@ void Menu::set_sfx_levels(const float *levels) {
         for (int i = 0; i < Settings::kSfxChannels; ++i)
             sfx_level_[i] = std::clamp(levels[i], 0.0f, 1.0f);
 }
-namespace menu_internal {
-
-std::string fmt(const char *f, int v) { return ::likethewind::fmt(f, v); }
-std::string fmt_fps(double v) { return ::likethewind::fmt_fps(v); }
-std::string fmt_rate(int tenths) { return ::likethewind::fmt_rate(tenths); }
-std::string pcm_channel_name(int channel) {
-    return ::likethewind::pcm_channel_name(channel);
-}
-std::string sfx_channel_name(int channel) {
-    return ::likethewind::sfx_channel_name(channel);
-}
-std::string pad_axis_name(int axis, bool invert) {
-    return ::likethewind::pad_axis_name(axis, invert);
-}
-
-} // namespace menu_internal
 
 } // namespace likethewind

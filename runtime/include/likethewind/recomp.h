@@ -19,4 +19,4 @@ typedef struct {
 }
 #endif
 
-#endif
+#endif // LIKETHEWIND_RECOMP_H

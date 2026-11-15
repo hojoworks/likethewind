@@ -36,7 +36,6 @@ enum class MenuKey {
 struct MenuInputDevice {
     std::string guid;
     std::string name;
-    bool game_controller = false;
 };
 
 struct MenuResult {
@@ -66,19 +65,15 @@ public:
         return open_ && tab_ == 2 && (sel_ == 6 || sel_ == 7);
     }
     void toggle() {
-        open_ = !open_;
-        if (open_ && mixer_mode_) {
+        if (open_) {
+            close();
+            return;
+        }
+        open_ = true;
+        if (mixer_mode_) {
             tab_ = 3;
             audio_page_ = 1;
             sel_ = 0;
-        }
-        if (!open_) {
-            mixer_page_ = 0;
-            mixer_locked_ = true;
-            audio_page_ = 0;
-            input_page_ = 0;
-            binding_ = -1;
-            confirm_clear_ = false;
         }
     }
     void close() {
@@ -89,6 +84,7 @@ public:
         input_page_ = 0;
         binding_ = -1;
         confirm_clear_ = false;
+        send_focus_ = 0;
     }
 
     MenuResult key(MenuKey k);
@@ -96,8 +92,6 @@ public:
     void draw_fps(uint32_t *pixels, int width, int height, double fps,
                   double present_fps, int blend_pct) const;
     void draw_gear(uint32_t *pixels, int width, int height, bool high) const;
-    void draw_tour_status(uint32_t *pixels, int width, int height,
-                          const std::string &title, const std::string &detail) const;
     void draw_tour_notice(uint32_t *pixels, int width, int height,
                           const std::string &text) const;
     void draw_tour_tracker(
@@ -215,4 +209,4 @@ private:
 
 } // namespace likethewind
 
-#endif
+#endif // LIKETHEWIND_MENU_H

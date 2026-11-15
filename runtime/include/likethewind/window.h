@@ -8,6 +8,6 @@ struct Settings;
 // Returns false if SDL is unavailable or the window could not be created.
 bool run_window(Machine &machine, Settings &settings, int max_frames,
                 bool save_settings = true, bool open_menu = false);
-}
+} // namespace likethewind
 
-#endif
+#endif // LIKETHEWIND_WINDOW_H

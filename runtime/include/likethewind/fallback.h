@@ -3,7 +3,7 @@
 
 namespace likethewind {
 void fallback_init();
-bool fallback_step();   // one guest instruction in Musashi; uses the active CPU state
-}
+void fallback_step();   // one guest instruction in Musashi; uses the active CPU state
+} // namespace likethewind
 
-#endif
+#endif // LIKETHEWIND_FALLBACK_H

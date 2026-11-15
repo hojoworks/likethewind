@@ -23,6 +23,7 @@
 #ifdef LIKETHEWIND_HAVE_SDL
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
+#include "../src/menu_sdl_keys.h"
 #endif
 
 namespace {
@@ -41,31 +42,6 @@ std::string mix_path(uint8_t cmd) {
     char b[64];
     std::snprintf(b, sizeof(b), "%s/%02X.cfg", kMixDir, (unsigned)cmd);
     return b;
-}
-
-bool menu_key_from_sym(SDL_Keycode sym, likethewind::MenuKey &k) {
-    switch (sym) {
-    case SDLK_UP: k = likethewind::MenuKey::Up; return true;
-    case SDLK_DOWN: k = likethewind::MenuKey::Down; return true;
-    case SDLK_LEFT: k = likethewind::MenuKey::Left; return true;
-    case SDLK_RIGHT: k = likethewind::MenuKey::Right; return true;
-    case SDLK_RETURN:
-    case SDLK_KP_ENTER:
-    case SDLK_SPACE: k = likethewind::MenuKey::Enter; return true;
-    case SDLK_q:
-    case SDLK_PAGEUP: k = likethewind::MenuKey::TabPrev; return true;
-    case SDLK_e:
-    case SDLK_PAGEDOWN: k = likethewind::MenuKey::TabNext; return true;
-    case SDLK_BACKSPACE: k = likethewind::MenuKey::Back; return true;
-    case SDLK_PLUS:
-    case SDLK_EQUALS:
-    case SDLK_KP_PLUS: k = likethewind::MenuKey::Plus; return true;
-    case SDLK_MINUS:
-    case SDLK_KP_MINUS: k = likethewind::MenuKey::Minus; return true;
-    case SDLK_s: k = likethewind::MenuKey::Solo; return true;
-    case SDLK_r: k = likethewind::MenuKey::SendSelect; return true;
-    default: return false;
-    }
 }
 
 void apply_audio(likethewind::Audio &audio, const likethewind::Settings &s) {
@@ -310,7 +286,8 @@ int run_mixer(int argc, char **argv) {
                         continue;
                     }
                     likethewind::MenuKey k;
-                    if (!menu_key_from_sym(e.key.keysym.sym, k)) continue;
+                    if (!likethewind::menu_key_from_sym(e.key.keysym.sym, k))
+                        continue;
                     const likethewind::MenuResult r = menu.key(k);
                     if (r.close || r.quit) running = false;
                     if (r.sound_cmd >= 0) {

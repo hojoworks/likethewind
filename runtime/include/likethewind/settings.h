@@ -198,4 +198,4 @@ struct Settings {
 
 } // namespace likethewind
 
-#endif
+#endif // LIKETHEWIND_SETTINGS_H

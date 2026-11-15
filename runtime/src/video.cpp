@@ -11,30 +11,18 @@
  * calibrations.
  */
 #include "likethewind/machine.h"
+#include "likethewind/bytes.h"
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
-#include <cstring>
 
 namespace likethewind {
-
-static inline uint16_t be16(const uint8_t *p) {
-    return (uint16_t)((p[0] << 8) | p[1]);
-}
-static inline uint32_t be32(const uint8_t *p) {
-    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
-           ((uint32_t)p[2] << 8) | p[3];
-}
-static inline uint64_t be64(const uint8_t *p) {
-    return ((uint64_t)be32(p) << 32) | be32(p + 4);
-}
 
 // One 64-bit sprite word: 16 four-bit pens, MSB first.
 static inline uint64_t sprite_word(const uint8_t *bank, int bank_size, int word_index) {
     int byte = (word_index & 0xFFFF) * 8;   // addr is in 64-bit words
     if (byte < 0 || byte + 8 > bank_size) return 0;
-    return be64(bank + byte);
+    return read_be64(bank + byte);
 }
 
 void Machine::render_y_sprites() {
@@ -46,18 +34,18 @@ void Machine::render_y_sprites() {
     int next = 0;
     for (int guard = 0; guard < 0x1000; guard++) {
         const uint8_t *d = ysprite + next * 16;
-        uint16_t w0 = be16(d + 0);
+        uint16_t w0 = read_be16(d + 0);
         if (w0 & 0x8000) break;
         if (visited[next]) break;
         visited[next] = true;
 
-        uint16_t w1 = be16(d + 2);
-        uint16_t w2 = be16(d + 4);
-        uint16_t w3 = be16(d + 6);
-        uint16_t w4 = be16(d + 8);
-        uint16_t w5 = be16(d + 10);
-        uint16_t w6 = be16(d + 12);
-        uint16_t w7 = be16(d + 14);
+        uint16_t w1 = read_be16(d + 2);
+        uint16_t w2 = read_be16(d + 4);
+        uint16_t w3 = read_be16(d + 6);
+        uint16_t w4 = read_be16(d + 8);
+        uint16_t w5 = read_be16(d + 10);
+        uint16_t w6 = read_be16(d + 12);
+        uint16_t w7 = read_be16(d + 14);
         next = w7 & 0x0FFF;
 
         int hide = w0 & 0x5000;
@@ -94,8 +82,8 @@ void Machine::render_y_sprites() {
             }
 
             const uint8_t *clip = rotation + ((sy & ~1) * 2);
-            int minx = be16(clip);
-            int maxx = be16(clip + 2);
+            int minx = read_be16(clip);
+            int maxx = read_be16(clip + 2);
             if ((minx & 0x8000) && ydelta < 0) break;
             if ((minx & 0x4000) && ydelta > 0) break;
 
@@ -117,15 +105,15 @@ void Machine::render_y_sprites() {
                 int xacc = 0;
                 if (!flip) {
                     int offs = (int)addr - 1;
-                    int guard = 0;
+                    int pixel_guard = 0;
                     while ((xdelta > 0 && x <= maxx) || (xdelta < 0 && x >= minx)) {
-                        if (++guard > 4096) break;
+                        if (++pixel_guard > 4096) break;
                         uint64_t pixels = sprite_word(bankbase, 0x80000, ++offs);
                         bool done = false;
                         for (int k = 0; k < 16; k++) {
                             int pix = (int)((pixels >> (60 - 4 * k)) & 0xF);
                             int ind = (indirect + pix * 2 + 1 < ysprite + sizeof(ysprite))
-                                          ? be16(indirect + pix * 2) : 0x1FF;
+                                          ? read_be16(indirect + pix * 2) : 0x1FF;
                             while (xacc < 0x200) {
                                 if (x >= minx && x <= maxx && ind < 0x1FE && x >= 0 && x < 512)
                                     dest[x] = (uint16_t)(colpri | ind);
@@ -142,15 +130,15 @@ void Machine::render_y_sprites() {
                     }
                 } else {
                     int offs = (int)addr + 1;
-                    int guard = 0;
+                    int pixel_guard = 0;
                     while ((xdelta > 0 && x <= maxx) || (xdelta < 0 && x >= minx)) {
-                        if (++guard > 4096) break;
+                        if (++pixel_guard > 4096) break;
                         uint64_t pixels = sprite_word(bankbase, 0x80000, --offs);
                         bool done = false;
                         for (int k = 0; k < 16; k++) {
                             int pix = (int)((pixels >> (4 * k)) & 0xF);
                             int ind = (indirect + pix * 2 + 1 < ysprite + sizeof(ysprite))
-                                          ? be16(indirect + pix * 2) : 0x1FF;
+                                          ? read_be16(indirect + pix * 2) : 0x1FF;
                             while (xacc < 0x200) {
                                 if (x >= minx && x <= maxx && ind < 0x1FE && x >= 0 && x < 512)
                                     dest[x] = (uint16_t)(colpri | ind);
@@ -182,13 +170,13 @@ void Machine::render_16b_sprites() {
 
     for (int entry = 0; entry < 256; entry++) {
         const uint8_t *d = bsprite + entry * 16;
-        uint16_t w0 = be16(d + 0);
-        uint16_t w1 = be16(d + 2);
-        uint16_t w2 = be16(d + 4);
+        uint16_t w0 = read_be16(d + 0);
+        uint16_t w1 = read_be16(d + 2);
+        uint16_t w2 = read_be16(d + 4);
         if (w2 & 0x8000) break;
-        uint16_t w3 = be16(d + 6);
-        uint16_t w4 = be16(d + 8);
-        uint16_t w5 = be16(d + 10);
+        uint16_t w3 = read_be16(d + 6);
+        uint16_t w4 = read_be16(d + 8);
+        uint16_t w5 = read_be16(d + 10);
 
         int bottom = w0 >> 8;
         int top = w0 & 0xFF;
@@ -229,7 +217,7 @@ void Machine::render_16b_sprites() {
                 for (int guard = 0; guard < 512; guard++) {
                     uint16_t pixels = 0;
                     int at = (word & 0xFFFF) * 2;
-                    if (at + 1 < 0x20000) pixels = be16(bankbase + at);
+                    if (at + 1 < 0x20000) pixels = read_be16(bankbase + at);
                     for (int k = 0; k < 4; k++) {
                         int pix = (pixels >> (12 - 4 * k)) & 0xF;
                         xacc = (xacc & 0x3F) + hzoom;
@@ -246,7 +234,7 @@ void Machine::render_16b_sprites() {
                 for (int guard = 0; guard < 512; guard++) {
                     uint16_t pixels = 0;
                     int at = (word & 0xFFFF) * 2;
-                    if (at + 1 < 0x20000) pixels = be16(bankbase + at);
+                    if (at + 1 < 0x20000) pixels = read_be16(bankbase + at);
                     for (int k = 0; k < 4; k++) {
                         int pix = (pixels >> (4 * k)) & 0xF;
                         xacc = (xacc & 0x3F) + hzoom;
@@ -267,12 +255,12 @@ void Machine::render_16b_sprites() {
 
 void Machine::render_scanline(int y) {
     const uint8_t *r = rotation;
-    int32_t currx = (int32_t)be32(r + 0x3F0 * 2);
-    int32_t curry = (int32_t)be32(r + 0x3F2 * 2);
-    int32_t dyy = (int32_t)be32(r + 0x3F4 * 2);
-    int32_t dxx = (int32_t)be32(r + 0x3F6 * 2);
-    int32_t dxy = (int32_t)be32(r + 0x3F8 * 2);
-    int32_t dyx = (int32_t)be32(r + 0x3FA * 2);
+    int32_t currx = (int32_t)read_be32(r + 0x3F0 * 2);
+    int32_t curry = (int32_t)read_be32(r + 0x3F2 * 2);
+    int32_t dyy = (int32_t)read_be32(r + 0x3F4 * 2);
+    int32_t dxx = (int32_t)read_be32(r + 0x3F6 * 2);
+    int32_t dxy = (int32_t)read_be32(r + 0x3F8 * 2);
+    int32_t dyx = (int32_t)read_be32(r + 0x3FA * 2);
 
     // The board starts at x=0. Widescreen shifts the window left symmetrically.
     const int x0 = view_x0;
@@ -297,7 +285,7 @@ void Machine::render_scanline(int y) {
 
     // The Y plane wraps at 512 rows on the board. Pick the copy that contains
     // the tilted view so a seam does not cut through the middle of the frame.
-    const int32_t base_curry = (int32_t)be32(r + 0x3F2 * 2);
+    const int32_t base_curry = (int32_t)read_be32(r + 0x3F2 * 2);
     const int32_t source_top_y = base_curry + dyx * (view_x0 + 27);
     const int32_t raw_r0y = source_top_y + dyx * (view_width - 1);
     const int32_t raw_b0y = source_top_y + dyy * (kVisibleLines - 1);

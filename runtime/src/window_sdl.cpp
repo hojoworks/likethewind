@@ -1,5 +1,5 @@
 /*
- * window_sdl.cpp the native host: SDL2 window, input, tab menu and audio.
+ * window_sdl.cpp — the native host: SDL2 window, input, tab menu and audio.
  *
  * The machine runs at the board's fixed 60 Hz and the renderer always uses
  * vsync. The video mode selects 60 fps (crisp) or 120/144 fps (cross-faded)
@@ -12,21 +12,25 @@
 #include "likethewind/crash.h"
 #include "likethewind/machine.h"
 #include "likethewind/menu.h"
+#include "likethewind/palette.h"
 #include "likethewind/settings.h"
+
+#include "window_mix.h"
+#include "window_tour.h"
 
 #ifdef LIKETHEWIND_HAVE_SDL
 #include <SDL.h>
+#include "menu_sdl_keys.h"
 #include "window_input.h"
+#include "window_rumble.h"
 #endif
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
-#include <iterator>
 #include <string>
 #include <vector>
 
@@ -41,685 +45,6 @@ constexpr const char *kScorePath = "nvram/pdrift/hiscore";
 // The game has initialized its default ranking table by this point. Restore
 // the saved table once the boot screen is out of the way.
 constexpr int kScoreRestoreFrame = 120;
-
-uint32_t argb(uint16_t v) {
-    uint8_t r = (uint8_t)((((v & 0x0F) << 1) | ((v >> 12) & 1)) * 255 / 31);
-    uint8_t g = (uint8_t)(((((v >> 4) & 0x0F) << 1) | ((v >> 13) & 1)) * 255 / 31);
-    uint8_t b = (uint8_t)(((((v >> 8) & 0x0F) << 1) | ((v >> 14) & 1)) * 255 / 31);
-    return 0xFF000000u | ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-}
-
-// Host-side "Special Tour" state. The board still owns the race simulation;
-// this only chooses the course/stage shown on the course-select screen and
-// advances after a completed course. Course stages 0-4 are the normal
-// championship, and stage 5 is the hidden special stage for that course.
-struct SpecialTourState {
-    static constexpr int kCourses = 5;
-    static constexpr int kStages = 5;
-
-    int phase = 0;   // 0 = A-E, 1 = Afterburner, 2 = Hang-On, 3 = complete
-    int start_course = 0;
-    int course = 0;
-    int stage = 0;
-    int courses_done = 0;
-    bool started = false;
-    bool race_started = false;
-    bool race_finished = false;
-    int last_mode = -1;
-    std::array<std::array<int8_t, kStages>, kCourses> places{};
-    std::array<int8_t, 2> special_places{{-1, -1}};
-    bool tracker_ready = false;
-    bool results_hold = false;   // keep final totals up until a new game
-    bool score_baseline_pending = true;
-    int last_score_seen = 0;
-    uint64_t total_frames = 0;
-    uint64_t total_hundredths = 0;
-    uint64_t stage_start_hundredths = 0;
-    int64_t total_score = 0;
-    int64_t race_start_frame = -1;
-
-    SpecialTourState() { reset(); }
-
-    void reset() {
-        phase = 0;
-        course = std::clamp(start_course, 0, 4);
-        stage = 0;
-        courses_done = 0;
-        started = false;
-        race_started = false;
-        race_finished = false;
-        last_mode = -1;
-        total_frames = 0;
-        total_hundredths = 0;
-        stage_start_hundredths = 0;
-        total_score = 0;
-        race_start_frame = -1;
-        for (auto &row : places) row.fill(-1);
-        special_places.fill(-1);
-        tracker_ready = false;
-        results_hold = false;
-        score_baseline_pending = true;
-        last_score_seen = 0;
-    }
-
-    bool course_all_first(int c) const {
-        if (c < 0 || c >= kCourses) return false;
-        for (int8_t place : places[c])
-            if (place != 0) return false;
-        return true;
-    }
-
-};
-
-int player_place(const Machine &machine) {
-    const auto word32 = [&](int off) {
-        return ((uint32_t)machine.shared[off] << 24) |
-               ((uint32_t)machine.shared[off + 1] << 16) |
-               ((uint32_t)machine.shared[off + 2] << 8) |
-               (uint32_t)machine.shared[off + 3];
-    };
-    // $CE620 points at the player object; $26(a0) is the race position
-    // (0 = first, 11 = last). The finish handler reads the same field.
-    const uint32_t ptr = word32(0xE620);
-    if (ptr < 0xC0000u || ptr >= 0xD0000u) return -1;
-    const size_t off = (size_t)(ptr - 0xC0000u) + 0x26;
-    if (off >= sizeof(machine.shared)) return -1;
-    return machine.shared[off];
-}
-
-int bcd_value(uint8_t value) {
-    return ((value >> 4) * 10) + (value & 0x0F);
-}
-
-uint64_t game_clock_hundredths(const Machine &machine) {
-    // The race clock is the three-byte BCD value at CE8A0: minutes,
-    // seconds, hundredths. The HUD builds its TIME line from these bytes.
-    const int minutes = bcd_value(machine.shared[0xE8A0]);
-    const int seconds = bcd_value(machine.shared[0xE8A1]);
-    const int hundredths = bcd_value(machine.shared[0xE8A2]);
-    return (uint64_t)minutes * 6000 + (uint64_t)seconds * 100 +
-           (uint64_t)hundredths;
-}
-
-int game_score(const Machine &machine) {
-    // The live score is a 32-bit packed BCD value at CFF60. The HUD score
-    // line is generated from it by the sub CPU.
-    const uint32_t raw = ((uint32_t)machine.shared[0xFF60] << 24) |
-                         ((uint32_t)machine.shared[0xFF61] << 16) |
-                         ((uint32_t)machine.shared[0xFF62] << 8) |
-                         (uint32_t)machine.shared[0xFF63];
-    uint32_t value = raw;
-    uint32_t result = 0;
-    uint32_t scale = 1;
-    for (int i = 0; i < 8; ++i) {
-        const uint32_t digit = value & 0x0F;
-        if (digit > 9) return (int)raw;  // not BCD; keep the raw value
-        result += digit * scale;
-        scale *= 10;
-        value >>= 4;
-    }
-    return (int)result;
-}
-
-uint16_t be16_at(const uint8_t *p) {
-    return (uint16_t)((p[0] << 8) | p[1]);
-}
-
-// The HUD uses a table of pre-rendered two-character tiles. Resolve a tile
-// address back to its numeric pair so the tracker can follow the exact value
-// the HUD is showing, including any score bonus that is still pending display.
-int hud_pair_value(const Machine &machine, uint16_t tile, bool high_only) {
-    const uint8_t *rom = machine.suby_rom();
-    if (!rom || !tile) return -1;
-    const int count = high_only ? 10 : 100;
-    const int base = high_only ? 0x3F28 : 0x3F48;
-    for (int value = 0; value < count; ++value) {
-        const int bcd = high_only ? value : ((value / 10) << 4) | (value % 10);
-        const uint16_t def = be16_at(rom + base + bcd * 2);
-        if (!def) continue;
-        if (be16_at(rom + def + 2) == tile) return value;
-    }
-    return -1;
-}
-
-int64_t read_hud_time(const Machine &machine, const uint8_t *sprite_list) {
-    int pair[3] = {-1, -1, -1};
-    for (int entry = 0; entry < 256; ++entry) {
-        const uint8_t *d = sprite_list + entry * 16;
-        const uint16_t w0 = be16_at(d);
-        const int top = w0 & 0xFF;
-        const int bottom = w0 >> 8;
-        if (top != 51 || bottom != 57) continue;
-        const int screen_x = (be16_at(d + 2) & 0x01FF) - 0xBD;
-        int slot = -1;
-        if (screen_x == 34) slot = 0;
-        else if (screen_x == 52) slot = 1;
-        else if (screen_x == 70) slot = 2;
-        if (slot < 0) continue;
-        int value = hud_pair_value(machine, be16_at(d + 6), true);
-        if (value < 0) value = hud_pair_value(machine, be16_at(d + 6), false);
-        pair[slot] = value;
-    }
-    if (pair[1] >= 0 && pair[2] >= 0) {
-        const int minutes = pair[0] >= 0 ? pair[0] : 0;
-        return (int64_t)minutes * 6000 + pair[1] * 100 + pair[2];
-    }
-    return -1;
-}
-
-std::string format_tour_clock(uint64_t hundredths) {
-    char buf[32];
-    std::snprintf(buf, sizeof(buf), "%llu:%02llu.%02llu",
-                  (unsigned long long)(hundredths / 6000),
-                  (unsigned long long)((hundredths / 100) % 60),
-                  (unsigned long long)(hundredths % 100));
-    return buf;
-}
-
-// A complete mixer snapshot, so per-song changes can cross-fade instead of
-// jumping to the new channel trims. A/B and the Audio Mix preset bypass this
-// and apply their target immediately.
-struct MixParams {
-    int ym_volume[8]{};
-    int pcm_volume[16]{};
-    int ym_send[8]{};
-    int pcm_send[16]{};
-    int sfx_volume[Settings::kSfxChannels]{};
-    int sfx_send[Settings::kSfxChannels]{};
-    int sfx_reverb_send[Settings::kSfxChannels]{};
-    int ym_reverb_send[8]{};
-    int pcm_reverb_send[16]{};
-    bool chorus_enabled = false;
-    int chorus_rate = 15;
-    int chorus_depth = 50;
-    int chorus_delay = 12;
-    int chorus_feedback = 0;
-    int chorus_mix = 30;
-    bool reverb_enabled = false;
-    int reverb_decay = 60;
-    int reverb_damping = 40;
-    int reverb_predelay = 0;
-    int reverb_mix = 25;
-    uint32_t solo_mask = 0;
-};
-
-MixParams stock_mix() {
-    MixParams p;
-    std::fill(std::begin(p.ym_volume), std::end(p.ym_volume), 100);
-    std::fill(std::begin(p.pcm_volume), std::end(p.pcm_volume), 100);
-    std::fill(std::begin(p.sfx_volume), std::end(p.sfx_volume), 100);
-    return p;
-}
-
-MixParams custom_mix(const Settings &s) {
-    MixParams p;
-    std::copy(std::begin(s.ym_volume), std::end(s.ym_volume), std::begin(p.ym_volume));
-    std::copy(std::begin(s.pcm_volume), std::end(s.pcm_volume), std::begin(p.pcm_volume));
-    std::copy(std::begin(s.ym_send), std::end(s.ym_send), std::begin(p.ym_send));
-    std::copy(std::begin(s.pcm_send), std::end(s.pcm_send), std::begin(p.pcm_send));
-    std::copy(std::begin(s.sfx_lane_volume), std::end(s.sfx_lane_volume),
-              std::begin(p.sfx_volume));
-    std::copy(std::begin(s.sfx_lane_send), std::end(s.sfx_lane_send),
-              std::begin(p.sfx_send));
-    std::copy(std::begin(s.sfx_lane_reverb_send),
-              std::end(s.sfx_lane_reverb_send), std::begin(p.sfx_reverb_send));
-    std::copy(std::begin(s.ym_reverb_send), std::end(s.ym_reverb_send),
-              std::begin(p.ym_reverb_send));
-    std::copy(std::begin(s.pcm_reverb_send), std::end(s.pcm_reverb_send),
-              std::begin(p.pcm_reverb_send));
-    p.chorus_enabled = s.chorus_enabled;
-    p.chorus_rate = s.chorus_rate;
-    p.chorus_depth = s.chorus_depth;
-    p.chorus_delay = s.chorus_delay;
-    p.chorus_feedback = s.chorus_feedback;
-    p.chorus_mix = s.chorus_mix;
-    p.reverb_enabled = s.reverb_enabled;
-    p.reverb_decay = s.reverb_decay;
-    p.reverb_damping = s.reverb_damping;
-    p.reverb_predelay = s.reverb_predelay;
-    p.reverb_mix = s.reverb_mix;
-    p.solo_mask = s.solo_mask;
-    return p;
-}
-
-void apply_mix(Audio *audio, const MixParams &p) {
-    if (!audio) return;
-    audio->set_channel_volumes(p.ym_volume, p.pcm_volume);
-    audio->set_sfx_volumes(p.sfx_volume, p.sfx_send, p.sfx_reverb_send);
-    audio->set_chorus_sends(p.ym_send, p.pcm_send);
-    audio->set_reverb_sends(p.ym_reverb_send, p.pcm_reverb_send);
-    audio->set_solo_mask(p.solo_mask);
-    audio->set_chorus(p.chorus_enabled, p.chorus_rate, p.chorus_depth, p.chorus_delay,
-                      p.chorus_feedback, p.chorus_mix);
-    audio->set_reverb(p.reverb_enabled, p.reverb_decay, p.reverb_damping,
-                      p.reverb_predelay, p.reverb_mix);
-}
-
-// Gamepad force feedback. The small right-hand (high-frequency) motor carries
-// steering/tire load, the large left-hand (low-frequency) motor carries the
-// heavy stage-intro revs and crash impacts, and there is no idle engine hum.
-struct RumbleState {
-    float impulse = 0.0f;
-    float corner = 0.0f;
-    float grip_phase = 0.0f;
-    float brake_phase = 0.0f;
-    float prev_brake = 0.0f;
-    int prev_speed = 0;
-    int speed_hist[8] = {};
-    int speed_hist_pos = 0;
-    int intro_frames = 0;
-    int launch_frames = 0;
-    int throttle_bump_frames = 0;
-    int release_frames = 0;
-    int last_mode = -1;
-    int turn_hold = 0;
-    bool launch_armed = false;
-    bool throttle_bump_armed = false;
-    uint32_t collisions = 0;
-    Uint16 low = 0;
-    Uint16 high = 0;
-    Uint16 release_low = 0;
-    Uint16 release_high = 0;
-    Uint32 reissue_at = 0;
-    bool turn_active = false;
-    bool warned = false;
-};
-
-void stop_rumble(SDL_GameController *pad, RumbleState &state) {
-    if (pad && (state.low || state.high))
-        SDL_GameControllerRumble(pad, 0, 0, 0);
-    state.low = state.high = 0;
-    state.impulse = 0.0f;
-    state.corner = 0.0f;
-    state.grip_phase = 0.0f;
-    state.brake_phase = 0.0f;
-    state.prev_brake = 0.0f;
-    state.turn_active = false;
-    state.turn_hold = 0;
-    state.launch_frames = 0;
-    state.launch_armed = false;
-    state.throttle_bump_frames = 0;
-    state.throttle_bump_armed = false;
-    state.release_frames = 0;
-    state.release_low = 0;
-    state.release_high = 0;
-    state.reissue_at = 0;
-}
-
-// Every gameplay effect goes through this one multiplier. There are no
-// per-effect strength overrides.
-Uint16 rumble_level(float value, int strength) {
-    const float scaled = std::clamp(value, 0.0f, 1.0f) *
-                         (std::clamp(strength, 0, 100) / 100.0f);
-    return (Uint16)(scaled * 65535.0f);
-}
-
-void update_rumble(SDL_GameController *pad, bool supported, const Settings &s,
-                   Machine &m, RumbleState &state, bool racing, int mode,
-                   bool enabled) {
-    static const bool debug = std::getenv("LIKETHEWIND_RUMBLE_DEBUG") != nullptr;
-    static int debug_tick = 0;
-    const int speed = (m.shared[0xEA12] << 8) | m.shared[0xEA13];
-    const uint32_t collisions =
-        m.audio() ? m.audio()->collision_events() : 0;
-    if (collisions != state.collisions) {
-        if (debug) {
-            std::fprintf(stderr,
-                         "[rumble] hit sample +%u speed=%d racing=%d\n",
-                         (unsigned)(collisions - state.collisions), speed,
-                         racing ? 1 : 0);
-        }
-        if (racing && enabled && supported) {
-            state.impulse = 1.0f;
-            state.reissue_at = 0;   // send the impact peak immediately
-        }
-        state.collisions = collisions;
-    }
-
-    if (!enabled || !supported || !pad) {
-        stop_rumble(pad, state);
-        state.prev_speed = speed;
-        state.intro_frames = 0;
-        state.launch_frames = 0;
-        state.launch_armed = false;
-        state.last_mode = mode;
-        return;
-    }
-
-    // Mode 11 is the pre-race stage flyover, and mode 16 is the "STAGE n /
-    // START" screen. Fire at both so the revs start early and do not wait
-    // until the last fraction of a second before the race.
-    if (mode == 11 && state.last_mode != 11) state.intro_frames = 300;
-    if (mode < 11 || mode >= 20) state.intro_frames = 0;
-    if (mode == 20 && state.last_mode != 20) {
-        state.launch_armed = true;
-        state.launch_frames = 0;
-    }
-    if (mode != 20) {
-        state.launch_frames = 0;
-        state.launch_armed = false;
-    }
-    state.last_mode = mode;
-
-    // Some hits do not have a mapped voice sample (or roles.cfg is absent).
-    // A sudden loss still reads as a collision, and an 8-frame peak catches
-    // crashes that scrub speed over several frames instead of one.
-    if (state.prev_speed > 60 && speed < state.prev_speed - 18) {
-        if (debug) {
-            std::fprintf(stderr, "[rumble] speed drop %d -> %d\n",
-                         state.prev_speed, speed);
-        }
-        const float drop = (float)(state.prev_speed - speed) / 120.0f;
-        state.impulse = std::max(state.impulse, std::min(1.0f, drop));
-        state.reissue_at = 0;
-    }
-    state.prev_speed = speed;
-
-    state.speed_hist[state.speed_hist_pos] = speed;
-    state.speed_hist_pos = (state.speed_hist_pos + 1) % 8;
-    int speed_peak = 0;
-    for (int v : state.speed_hist) speed_peak = std::max(speed_peak, v);
-    if (racing && speed_peak > 80 && speed_peak - speed > 55) {
-        if (debug) {
-            std::fprintf(stderr, "[rumble] crash peak %d -> %d\n",
-                         speed_peak, speed);
-        }
-        state.impulse = 1.0f;
-        state.reissue_at = 0;
-        for (int &v : state.speed_hist) v = speed;
-        state.speed_hist_pos = 0;
-    }
-
-    const bool intro = state.intro_frames > 0;
-    if (!racing && !intro) {
-        // Race over (or the finish screen): let the last effect trail off
-        // instead of leaving the motors latched on.
-        state.impulse = 0.0f;
-        state.corner = 0.0f;
-        state.turn_active = false;
-        state.turn_hold = 0;
-        state.launch_frames = 0;
-        state.launch_armed = false;
-        state.throttle_bump_frames = 0;
-        state.throttle_bump_armed = false;
-        state.intro_frames = 0;
-        state.prev_speed = speed;
-
-        if (state.release_frames == 0) {
-            if (!state.low && !state.high) {
-                stop_rumble(pad, state);
-                return;
-            }
-            state.release_low = state.low;
-            state.release_high = state.high;
-            state.release_frames = 90;   // 1.5 s at the board's 60 Hz
-        }
-
-        const float gain = (float)state.release_frames / 90.0f;
-        const Uint16 low = (Uint16)(state.release_low * gain);
-        const Uint16 high = (Uint16)(state.release_high * gain);
-        if (debug && (debug_tick++ % 15) == 0) {
-            std::fprintf(stderr,
-                         "[rumble] release=%d low=%u high=%u\n",
-                         state.release_frames, (unsigned)low,
-                         (unsigned)high);
-        }
-        if (state.release_frames <= 1 || (low < 256 && high < 256)) {
-            stop_rumble(pad, state);
-        } else {
-            SDL_GameControllerRumble(pad, low, high, 120);
-            state.low = low;
-            state.high = high;
-            state.reissue_at = 0;
-            --state.release_frames;
-        }
-        return;
-    }
-
-    state.release_frames = 0;
-    state.release_low = 0;
-    state.release_high = 0;
-
-    float low = 0.0f;
-    float high = 0.0f;
-    float yaw_deg = 0.0f;
-
-    if (intro) {
-        // Five-second stage-intro cue:
-        //   dunn -- dada -- dunndunn
-        //   vroom-vroom ... vroom-vroom
-        // The heavy motor carries the hits and revs; the small motor adds just
-        // enough edge to make each pulse distinct.
-        const int elapsed = 300 - state.intro_frames;
-        auto pulse = [&](int start, int len, float lo, float hi) {
-            if (elapsed < start || elapsed >= start + len) return;
-            const float t =
-                (float)(elapsed - start) / (float)(len - 1);
-            const float env =
-                std::sin(std::clamp(t, 0.0f, 1.0f) * 3.14159265f);
-            low = std::max(low, lo * env);
-            high = std::max(high, hi * env);
-        };
-        // dunn--dada-dunndunn
-        pulse(0, 18, 0.80f, 0.12f);
-        pulse(28, 7, 0.50f, 0.08f);
-        pulse(39, 7, 0.50f, 0.08f);
-        pulse(52, 10, 0.60f, 0.10f);
-        pulse(66, 13, 0.70f, 0.12f);
-        // vroom-vroom, tiny gap, vroom-vroom
-        pulse(90, 21, 0.55f, 0.25f);
-        pulse(117, 21, 0.65f, 0.30f);
-        pulse(150, 21, 0.55f, 0.25f);
-        pulse(177, 21, 0.65f, 0.30f);
-        // Fill the last stretch before the countdown instead of leaving a
-        // long silent gap.
-        pulse(210, 24, 0.55f, 0.25f);
-        pulse(245, 12, 0.75f, 0.12f);
-        pulse(265, 12, 0.80f, 0.12f);
-        --state.intro_frames;
-    } else {
-        // Use the board's rotation matrix, not the host joystick, so the
-        // rumble follows the car's actual turn in the game. The matrix yaw is
-        // zero when the camera/road is straight and grows as the car commits
-        // to a corner. It cannot be driven by wiggling the stick while the
-        // car is crashed or stationary.
-        const uint8_t *rot = m.rotation;
-        auto read_be32 = [](const uint8_t *p) -> int32_t {
-            return (int32_t)(((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
-                             ((uint32_t)p[2] << 8) | (uint32_t)p[3]);
-        };
-        const int32_t dxx = read_be32(rot + 0x3F6 * 2);
-        const int32_t dxy = read_be32(rot + 0x3F8 * 2);
-        yaw_deg = std::abs((float)std::atan2((double)dxy, (double)dxx)) *
-                  57.2957795f;
-        const float speed_f = std::clamp(speed / 240.0f, 0.0f, 1.0f);
-        const float gas_f =
-            std::clamp((float)m.in_gas / 255.0f, 0.0f, 1.0f);
-
-        // Arm the launch burnout at mode 20, but start it only once the
-        // speedometer actually leaves zero with the throttle down.
-        if (state.launch_armed) {
-            if (speed > 0 && gas_f > 0.55f) {
-                state.launch_frames = 90;
-                state.launch_armed = false;
-            } else if (speed > 80) {
-                state.launch_armed = false;
-            }
-        }
-
-        // Hysteresis plus a short sustain requirement: a brief correction
-        // must not start the rumble. Release only after the view has been
-        // straight for several frames. Suppress cornering entirely during a
-        // crash impulse so a spinning car does not fight the impact rumble.
-        const bool crashing = state.impulse > 0.05f;
-        if (crashing) {
-            state.turn_active = false;
-            state.turn_hold = 0;
-        } else if (!state.turn_active) {
-            if (yaw_deg > 5.0f) {
-                if (++state.turn_hold >= 6) state.turn_active = true;
-            } else {
-                state.turn_hold = 0;
-            }
-        } else if (yaw_deg < 3.0f) {
-            if (++state.turn_hold >= 6) {
-                state.turn_active = false;
-                state.turn_hold = 0;
-            }
-        } else {
-            state.turn_hold = 0;
-        }
-
-        // Arm a small extra high-motor "vroom" only after the pedal has been
-        // genuinely released. The next time it reaches full throttle while
-        // cornering, the top end gets a brief bump.
-        if (gas_f < 0.15f) {
-            state.throttle_bump_armed = true;
-        } else if (gas_f >= 0.92f) {
-            if (state.throttle_bump_armed && state.turn_active)
-                state.throttle_bump_frames = 8;
-            state.throttle_bump_armed = false;
-        }
-
-        float corner_target = 0.0f;
-        if (state.turn_active) {
-            // Once a real corner is confirmed, start with a gentle amount and
-            // spread the rest over a wide yaw range so mid-corner has a
-            // useful middle rather than snapping between off and full.
-            const float ramp =
-                0.15f +
-                0.85f * std::clamp((yaw_deg - 5.0f) / 7.0f, 0.0f, 1.0f);
-            corner_target = ramp * speed_f;
-        }
-        state.corner += (corner_target - state.corner) * 0.25f;
-        if (state.corner < 0.001f) state.corner = 0.0f;
-
-        // The small high-frequency motor is the tire/slip channel and follows
-        // the throttle, so easing off the gas softens the cornering buzz.
-        // The heavy motor is deliberately modest and slowly "breathes" to
-        // suggest grip coming and going instead of a constant shake.
-        const float throttle = 0.15f + 0.85f * gas_f;
-        high = 0.85f * std::pow(state.corner, 0.8f) * throttle;
-        if (state.throttle_bump_frames > 0) {
-            high += 0.12f * state.corner *
-                    ((float)state.throttle_bump_frames / 8.0f);
-            --state.throttle_bump_frames;
-        }
-
-        // Brake screech: the rumble API has no frequency control, so pulse
-        // the small motor faster as brake pressure rises. This gives the
-        // feeling of a rising tire squeal rather than a static buzz.
-        const float brake_f =
-            std::clamp((float)m.in_brake / 255.0f, 0.0f, 1.0f);
-        const float steer_norm = std::clamp(
-            std::abs((int)m.in_wheel - 0x80) / 96.0f, 0.0f, 1.0f);
-        const float yaw_turn =
-            std::clamp((yaw_deg - 1.0f) / 6.0f, 0.0f, 1.0f);
-        const float brake_turn =
-            std::max(yaw_turn, steer_norm * 0.85f);
-        const bool braking =
-            brake_f > 0.05f && speed > 10 && !crashing &&
-            brake_turn > 0.02f;
-        if (braking) {
-            if (state.prev_brake <= 0.05f)
-                state.brake_phase = 1.5707963f;  // start at full squeal
-            const float rate_hz = 6.0f + 4.0f * brake_f;
-            state.brake_phase += 6.2831853f * rate_hz / 60.0f;
-            if (state.brake_phase >= 6.2831853f)
-                state.brake_phase -= 6.2831853f;
-            const float mod =
-                0.5f + 0.5f * std::sin(state.brake_phase);
-            const float brake_corner =
-                std::max(state.corner, brake_turn * speed_f);
-            // Strong floor so even a quick, light brake is felt; pressure
-            // mainly controls how fast the squeal pulses.
-            const float brake_pressure = 0.80f + 0.20f * brake_f;
-            const float brake_level = std::min(
-                1.0f, brake_pressure * brake_corner * 1.5f);
-            high = std::max(high, brake_level * (0.55f + 0.45f * mod));
-            low += 0.25f * brake_level;
-            state.prev_brake = brake_f;
-        } else {
-            state.brake_phase = 0.0f;
-            state.prev_brake = 0.0f;
-        }
-        state.grip_phase += 0.33f;
-        const float grip_a = 0.5f + 0.5f * std::sin(state.grip_phase);
-        const float grip_b =
-            0.5f + 0.5f * std::sin(state.grip_phase * 1.7f + 1.1f);
-        const float grip = 0.65f * grip_a + 0.35f * grip_b;
-        low = 0.15f * state.corner * (0.65f + 0.35f * grip);
-    }
-
-    // Crash: keep the initial thump but let the high-frequency motor carry
-    // most of the energy so it cracks rather than rattling the whole pad.
-    low += 0.45f * state.impulse * state.impulse;
-    high += 0.90f * state.impulse;
-
-    // Launch burnout: a long, high-motor-led ramp. The small motor swells
-    // over the first ~0.45 s, holds, then trails off. The heavy motor only
-    // adds a little engine weight underneath.
-    if (state.launch_frames > 0) {
-        const float gas_f =
-            std::clamp((float)m.in_gas / 255.0f, 0.0f, 1.0f);
-        const float speed_fade =
-            std::clamp(1.0f - (float)speed / 200.0f, 0.0f, 1.0f);
-        const float elapsed =
-            (float)(90 - state.launch_frames) / 90.0f;
-        const float attack = std::clamp(elapsed / 0.30f, 0.0f, 1.0f);
-        const float release =
-            1.0f - std::clamp((elapsed - 0.65f) / 0.35f, 0.0f, 1.0f);
-        const float spin =
-            0.92f + 0.08f * std::sin(elapsed * 6.2831853f * 3.0f);
-        const float launch = gas_f * speed_fade * attack * release * spin;
-        low += 0.10f * launch;
-        high += 0.95f * launch;
-        --state.launch_frames;
-    }
-
-    const Uint16 low_value = rumble_level(low, s.rumble_strength);
-    const Uint16 high_value = rumble_level(high, s.rumble_strength);
-    if (debug && state.impulse > 0.90f) {
-        std::fprintf(stderr, "[rumble] crash low=%u high=%u\n",
-                     (unsigned)low_value, (unsigned)high_value);
-    }
-    state.impulse *= 0.86f;
-    if (state.impulse < 0.01f) state.impulse = 0.0f;
-    if (debug && (debug_tick++ % 30) == 0) {
-        std::fprintf(stderr,
-                     "[rumble] mode=%d racing=%d enabled=%d speed=%d gas=%d "
-                     "brake=%d wheel=%d yaw=%.1f intro=%d turn=%d hold=%d "
-                     "launch=%d bump=%d corner=%.2f str=%d low=%u high=%u\n",
-                     mode, racing ? 1 : 0, enabled ? 1 : 0, speed,
-                     (int)m.in_gas, (int)m.in_brake, (int)m.in_wheel,
-                     yaw_deg, state.intro_frames,
-                     state.turn_active ? 1 : 0, state.turn_hold,
-                     state.launch_frames, state.throttle_bump_frames,
-                     state.corner, s.rumble_strength, (unsigned)low_value,
-                     (unsigned)high_value);
-    }
-    const bool nonzero = low_value != 0 || high_value != 0;
-    const Uint32 now = SDL_GetTicks();
-    auto send_rumble = [&](Uint16 l, Uint16 h, Uint32 duration) {
-        const int rc = SDL_GameControllerRumble(pad, l, h, duration);
-        if (rc != 0 && !state.warned) {
-            state.warned = true;
-            std::fprintf(stderr, "[input] rumble failed: %s\n", SDL_GetError());
-        }
-    };
-    // Reissue at 20 Hz. Updating the motor on every 60 Hz frame makes the
-    // controller cancel/restart the effect constantly; at high amplitudes
-    // some pads respond poorly to that. Holding each value for 50 ms also
-    // makes the steering rumble feel smoother.
-    if (now >= state.reissue_at) {
-        if (nonzero || state.low || state.high) {
-            send_rumble(low_value, high_value, nonzero ? 120 : 0);
-            state.low = low_value;
-            state.high = high_value;
-        }
-        state.reissue_at = now + 50;
-    }
-}
 
 } // namespace
 
@@ -1020,7 +345,7 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
     auto publish_input_devices = [&]() {
         std::vector<MenuInputDevice> list;
         for (const InputDeviceInfo &info : input.infos())
-            list.push_back({info.guid, info.name, info.game_controller});
+            list.push_back({info.guid, info.name});
         menu.set_input_devices(list);
     };
     input.open_all();
@@ -1942,8 +1267,6 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         // In 60 FPS mode this keeps the output at 60 presents even on a
         // 120/144 Hz display instead of repeating the newest board frame at
         // the display refresh.
-        const bool do_present = true;
-
         if (settings.frame_rate != last_frame_rate) {
             last_frame_rate = settings.frame_rate;
             menu.set_present_stats(0.0, 0);
@@ -1973,11 +1296,11 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         // (a frame that ran the emulation is heavier than one that only
         // blended), which shows up as uneven motion at 120/144 Hz.
         {
-            const Uint64 now = SDL_GetPerformanceCounter();
+            const Uint64 slot_now = SDL_GetPerformanceCounter();
             const Uint64 step = (Uint64)(target_interval * (double)perf_freq);
             if (present_hz != target_hz || next_present == 0) {
                 present_hz = target_hz;
-                next_present = now + step;
+                next_present = slot_now + step;
             }
             for (;;) {
                 const Uint64 t = SDL_GetPerformanceCounter();
@@ -1990,113 +1313,110 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             }
         }
 
-        if (do_present) {
-            double alpha = 1.0;
-            if (!menu_up && settings.frame_rate > 60)
-                // Measured at the slot, not when the board frame ran: the
-                // scheduling wait above would otherwise make the image stale.
-                alpha = (double)(SDL_GetPerformanceCounter() - last_frame_run) /
-                        (double)perf_freq / frame_time;
-            if (frames <= 1) alpha = 1.0;
-            alpha = std::clamp(alpha, 0.0, 1.0);
-            const int ia = (int)(alpha * 256.0);
-            // Ignore tiny timing remainders: a near-0 alpha is a pure frame,
-            // not a visible cross-fade.
-            blended = (ia >= 16 && ia <= 240);
-            for (int y = 0; y < Machine::kVisibleLines; y++) {
-                for (int x = 0; x < machine.view_width; x++) {
-                    const size_t si = (size_t)y * Machine::kRenderWidth + x;
-                    const uint16_t prev_idx = prev_screen[si];
-                    const uint16_t cur_idx = machine.screen[si];
-                    uint32_t ca = argb(machine.palette[prev_idx & 0x3FFF]);
-                    uint32_t cb = argb(machine.palette[cur_idx & 0x3FFF]);
-                    if (ia >= 256) {
-                        pixels[(size_t)y * machine.view_width + x] = cb;
-                    } else {
-                        uint32_t r = (((ca >> 16) & 0xFF) * (256 - ia) +
-                                      ((cb >> 16) & 0xFF) * ia) >> 8;
-                        uint32_t g = (((ca >> 8) & 0xFF) * (256 - ia) +
-                                      ((cb >> 8) & 0xFF) * ia) >> 8;
-                        uint32_t b = ((ca & 0xFF) * (256 - ia) + (cb & 0xFF) * ia) >> 8;
-                        pixels[(size_t)y * machine.view_width + x] =
-                            0xFF000000u | (r << 16) | (g << 8) | b;
-                    }
+        double alpha = 1.0;
+        if (!menu_up && settings.frame_rate > 60)
+            // Measured at the slot, not when the board frame ran: the
+            // scheduling wait above would otherwise make the image stale.
+            alpha = (double)(SDL_GetPerformanceCounter() - last_frame_run) /
+                    (double)perf_freq / frame_time;
+        if (frames <= 1) alpha = 1.0;
+        alpha = std::clamp(alpha, 0.0, 1.0);
+        const int ia = (int)(alpha * 256.0);
+        // Ignore tiny timing remainders: a near-0 alpha is a pure frame,
+        // not a visible cross-fade.
+        blended = (ia >= 16 && ia <= 240);
+        for (int y = 0; y < Machine::kVisibleLines; y++) {
+            for (int x = 0; x < machine.view_width; x++) {
+                const size_t si = (size_t)y * Machine::kRenderWidth + x;
+                const uint16_t prev_idx = prev_screen[si];
+                const uint16_t cur_idx = machine.screen[si];
+                uint32_t ca = palette_argb(machine.palette[prev_idx & 0x3FFF]);
+                uint32_t cb = palette_argb(machine.palette[cur_idx & 0x3FFF]);
+                if (ia >= 256) {
+                    pixels[(size_t)y * machine.view_width + x] = cb;
+                } else {
+                    uint32_t r = (((ca >> 16) & 0xFF) * (256 - ia) +
+                                  ((cb >> 16) & 0xFF) * ia) >> 8;
+                    uint32_t g = (((ca >> 8) & 0xFF) * (256 - ia) +
+                                  ((cb >> 8) & 0xFF) * ia) >> 8;
+                    uint32_t b = ((ca & 0xFF) * (256 - ia) + (cb & 0xFF) * ia) >> 8;
+                    pixels[(size_t)y * machine.view_width + x] =
+                        0xFF000000u | (r << 16) | (g << 8) | b;
                 }
             }
-            if (!menu_up)
-                menu.draw_gear(pixels.data(), machine.view_width, Machine::kVisibleLines,
-                               (machine.in_general & 0x20) != 0);
-            if (menu_up) menu.draw(pixels.data(), machine.view_width, Machine::kVisibleLines);
-            const int mode_now =
-                (machine.shared[0xE09C] << 8) | machine.shared[0xE09D];
-            static int note_mode = -1;
-            if (mode_now != note_mode) {
-                crash_note("mode=%d tour phase=%d course=%d stage=%d "
-                           "done=%d elapsed=%llu",
-                           mode_now, tour.phase, tour.course, tour.stage,
-                           tour.courses_done,
-                           (unsigned long long)tour.total_hundredths);
-                note_mode = mode_now;
-            }
-            if (!menu_up && settings.special_tour && tour.started &&
-                tour.tracker_ready &&
-                ((mode_now >= 8 && mode_now <= 25) || tour.results_hold)) {
-                uint64_t current_hundredths = 0;
-                uint64_t total_hundredths = tour.total_hundredths;
-                if (tour.race_start_frame >= 0) {
-                    const int64_t hud_clock =
-                        read_hud_time(machine, machine.bsprite);
-                    if (hud_clock >= 0) {
-                        current_hundredths = (uint64_t)hud_clock;
-                    } else {
-                        const uint64_t current_clock =
-                            game_clock_hundredths(machine);
-                        if (current_clock > 0)
-                            current_hundredths = current_clock;
-                        else
-                            current_hundredths =
-                                (uint64_t)(machine.frame -
-                                           tour.race_start_frame) *
-                                100 / 60;
-                    }
-                    if (current_hundredths < tour.stage_start_hundredths)
-                        tour.stage_start_hundredths = current_hundredths;
-                    const uint64_t duration =
-                        current_hundredths >= tour.stage_start_hundredths
-                            ? current_hundredths - tour.stage_start_hundredths
-                            : current_hundredths;
-                    total_hundredths += duration;
-                    observe_score(game_score(machine));
+        }
+        if (!menu_up)
+            menu.draw_gear(pixels.data(), machine.view_width, Machine::kVisibleLines,
+                           (machine.in_general & 0x20) != 0);
+        if (menu_up) menu.draw(pixels.data(), machine.view_width, Machine::kVisibleLines);
+        const int mode_now =
+            (machine.shared[0xE09C] << 8) | machine.shared[0xE09D];
+        static int note_mode = -1;
+        if (mode_now != note_mode) {
+            crash_note("mode=%d tour phase=%d course=%d stage=%d "
+                       "done=%d elapsed=%llu",
+                       mode_now, tour.phase, tour.course, tour.stage,
+                       tour.courses_done,
+                       (unsigned long long)tour.total_hundredths);
+            note_mode = mode_now;
+        }
+        if (!menu_up && settings.special_tour && tour.started &&
+            tour.tracker_ready &&
+            ((mode_now >= 8 && mode_now <= 25) || tour.results_hold)) {
+            uint64_t current_hundredths = 0;
+            uint64_t total_hundredths = tour.total_hundredths;
+            if (tour.race_start_frame >= 0) {
+                const int64_t hud_clock =
+                    read_hud_time(machine, machine.bsprite);
+                if (hud_clock >= 0) {
+                    current_hundredths = (uint64_t)hud_clock;
+                } else {
+                    const uint64_t current_clock =
+                        game_clock_hundredths(machine);
+                    if (current_clock > 0)
+                        current_hundredths = current_clock;
+                    else
+                        current_hundredths =
+                            (uint64_t)(machine.frame -
+                                       tour.race_start_frame) *
+                            100 / 60;
                 }
-                // Two compact lines sized to the portrait strip: placements
-                // and the two special stages on top; total tour time and
-                // score underneath.
-                const std::string stats_line =
-                    "TIME " + format_tour_clock(total_hundredths) +
-                    "  SCORE " + std::to_string(tour.total_score);
-                menu.draw_tour_tracker(pixels.data(), machine.view_width,
-                                       Machine::kVisibleLines, tour.places,
-                                       tour.special_places, tour.start_course,
-                                       stats_line);
+                if (current_hundredths < tour.stage_start_hundredths)
+                    tour.stage_start_hundredths = current_hundredths;
+                const uint64_t duration =
+                    current_hundredths >= tour.stage_start_hundredths
+                        ? current_hundredths - tour.stage_start_hundredths
+                        : current_hundredths;
+                total_hundredths += duration;
+                observe_score(game_score(machine));
             }
-            if (!menu_up && settings.special_tour && tour.started &&
-                mode_now >= 8 && mode_now < 20 &&
-                (machine.frame / 30) % 2 == 0) {
-                menu.draw_tour_notice(pixels.data(), machine.view_width,
-                                      Machine::kVisibleLines,
-                                      "SPECIAL TOUR MODE ENABLED");
-            }
-            if (settings.show_fps && !menu_up)
-                menu.draw_fps(pixels.data(), machine.view_width, Machine::kVisibleLines,
-                              measured_fps, measured_present_fps, measured_blend_pct);
-
-            SDL_UpdateTexture(tex, nullptr, pixels.data(), machine.view_width * 4);
+            // Two compact lines sized to the portrait strip: placements
+            // and the two special stages on top; total tour time and
+            // score underneath.
+            const std::string stats_line =
+                "TIME " + format_tour_clock(total_hundredths) +
+                "  SCORE " + std::to_string(tour.total_score);
+            menu.draw_tour_tracker(pixels.data(), machine.view_width,
+                                   Machine::kVisibleLines, tour.places,
+                                   tour.special_places, tour.start_course,
+                                   stats_line);
         }
-
-        if (do_present) {
-            present_frames++;
-            if (blended) blend_frames++;
+        if (!menu_up && settings.special_tour && tour.started &&
+            mode_now >= 8 && mode_now < 20 &&
+            (machine.frame / 30) % 2 == 0) {
+            menu.draw_tour_notice(pixels.data(), machine.view_width,
+                                  Machine::kVisibleLines,
+                                  "SPECIAL TOUR MODE ENABLED");
         }
+        if (settings.show_fps && !menu_up)
+            menu.draw_fps(pixels.data(), machine.view_width, Machine::kVisibleLines,
+                          measured_fps, measured_present_fps, measured_blend_pct);
+
+        SDL_UpdateTexture(tex, nullptr, pixels.data(), machine.view_width * 4);
+
+        present_frames++;
+        if (blended) blend_frames++;
+
         const Uint64 stats_now = SDL_GetPerformanceCounter();
         const double stats_elapsed =
             (double)(stats_now - present_rate_start) / (double)perf_freq;

@@ -13,8 +13,6 @@ namespace likethewind {
 namespace {
 const char *const kTabs[] = {"CONTROLS", "DIP SW", "DISPLAY", "SOUND",
                              "MIXER",    "SYSTEM"};
-const char *const kOnOff[2] = {"OFF", "ON"};
-constexpr int kTabCount = 6;
 struct Glyph {
     char c;
     uint8_t rows[7];
@@ -298,25 +296,6 @@ void Menu::draw_gear(uint32_t *pixels, int width, int height, bool high) const {
 
     lamp(y + 2, high, 'H');
     lamp(y + 15, !high, 'L');
-}
-
-void Menu::draw_tour_status(uint32_t *pixels, int width, int height,
-                            const std::string &title,
-                            const std::string &detail) const {
-    if (!pixels || title.empty()) return;
-    const int title_w = small_text_width(title);
-    const int detail_w = detail.empty() ? 0 : small_text_width(detail);
-    const int bw = std::max(title_w, detail_w) + 12;
-    const int x = (width - bw) / 2;
-    const int y = 5;
-    const int bh = detail.empty() ? 16 : 25;
-    fill(pixels, width, height, x, y, bw, bh, 0x00000000, 190);
-    fill(pixels, width, height, x, y, bw, 1, 0xFFFFD040);
-    fill(pixels, width, height, x, y + bh - 1, bw, 1, 0xFFFFD040);
-    draw_small_text(pixels, width, height, x + 6, y + 4, title, 0xFFFFD040);
-    if (!detail.empty())
-        draw_small_text(pixels, width, height, x + 6, y + 14, detail,
-                        0xFF6FD3FF);
 }
 
 void Menu::draw_tour_notice(uint32_t *pixels, int width, int height,

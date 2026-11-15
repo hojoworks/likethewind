@@ -31,4 +31,4 @@ inline const char *music_track_name(uint8_t cmd) {
 
 } // namespace likethewind
 
-#endif
+#endif // LIKETHEWIND_MUSIC_TRACKS_H

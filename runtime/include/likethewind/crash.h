@@ -18,4 +18,4 @@ void crash_note(const char *fmt, ...);
 
 } // namespace likethewind
 
-#endif
+#endif // LIKETHEWIND_CRASH_H

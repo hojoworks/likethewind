@@ -89,7 +89,6 @@ void Settings::clamp() {
     reverb_damping = std::clamp(reverb_damping, 0, 100);
     reverb_predelay = std::clamp(reverb_predelay, 0, 50);
     reverb_mix = std::clamp(reverb_mix, 0, 100);
-    solo_mask &= 0xFFFFFFFFu;
     aspect = std::clamp(aspect, 0, 5);
     tour_start_course = std::clamp(tour_start_course, 0, 4);
     steer_deadzone = std::clamp(steer_deadzone, 0, 40);
@@ -141,38 +140,46 @@ void Settings::reset_gamepad() {
     racing_wheel = defaults.racing_wheel;
 }
 
+namespace {
+
+void copy_music_mix(Settings &dst, const Settings &src) {
+    for (int i = 0; i < 8; ++i) {
+        dst.ym_volume[i] = src.ym_volume[i];
+        dst.ym_send[i] = src.ym_send[i];
+        dst.ym_reverb_send[i] = src.ym_reverb_send[i];
+    }
+    for (int i = 0; i < 16; ++i) {
+        dst.pcm_volume[i] = src.pcm_volume[i];
+        dst.pcm_send[i] = src.pcm_send[i];
+        dst.pcm_reverb_send[i] = src.pcm_reverb_send[i];
+    }
+    dst.chorus_enabled = src.chorus_enabled;
+    dst.chorus_rate = src.chorus_rate;
+    dst.chorus_depth = src.chorus_depth;
+    dst.chorus_delay = src.chorus_delay;
+    dst.chorus_feedback = src.chorus_feedback;
+    dst.chorus_mix = src.chorus_mix;
+    dst.reverb_enabled = src.reverb_enabled;
+    dst.reverb_decay = src.reverb_decay;
+    dst.reverb_damping = src.reverb_damping;
+    dst.reverb_predelay = src.reverb_predelay;
+    dst.reverb_mix = src.reverb_mix;
+    dst.solo_mask = src.solo_mask;
+}
+
+} // namespace
+
 void Settings::reset_mixer(bool flat) {
     // Defaults are the initial values in settings.h. Sends return to zero, so
     // a reset mixer is fully dry. The Audio tab's bus volumes (music/SFX/
     // engine/master) are deliberately left alone.
     const Settings defaults;
-    for (int i = 0; i < 8; ++i) {
-        ym_volume[i] = defaults.ym_volume[i];
-        ym_send[i] = defaults.ym_send[i];
-        ym_reverb_send[i] = defaults.ym_reverb_send[i];
-    }
-    for (int i = 0; i < 16; ++i) {
-        pcm_volume[i] = defaults.pcm_volume[i];
-        pcm_send[i] = defaults.pcm_send[i];
-        pcm_reverb_send[i] = defaults.pcm_reverb_send[i];
-    }
+    copy_music_mix(*this, defaults);
     for (int i = 0; i < Settings::kSfxChannels; ++i) {
         sfx_lane_volume[i] = defaults.sfx_lane_volume[i];
         sfx_lane_send[i] = defaults.sfx_lane_send[i];
         sfx_lane_reverb_send[i] = defaults.sfx_lane_reverb_send[i];
     }
-    chorus_enabled = defaults.chorus_enabled;
-    chorus_rate = defaults.chorus_rate;
-    chorus_depth = defaults.chorus_depth;
-    chorus_delay = defaults.chorus_delay;
-    chorus_feedback = defaults.chorus_feedback;
-    chorus_mix = defaults.chorus_mix;
-    reverb_enabled = defaults.reverb_enabled;
-    reverb_decay = defaults.reverb_decay;
-    reverb_damping = defaults.reverb_damping;
-    reverb_predelay = defaults.reverb_predelay;
-    reverb_mix = defaults.reverb_mix;
-    solo_mask = defaults.solo_mask;
     if (flat) {
         for (int &v : ym_volume) v = 100;
         for (int &v : pcm_volume) v = 100;
@@ -190,27 +197,7 @@ void Settings::reset_music_mixer() {
     // Per-song mixes cover YM and the eight PCM music lanes only. SFX lanes
     // 9-14 and the two engine lanes are global and must survive a song change.
     const Settings defaults;
-    for (int i = 0; i < 8; ++i) {
-        ym_volume[i] = defaults.ym_volume[i];
-        ym_send[i] = defaults.ym_send[i];
-        ym_reverb_send[i] = defaults.ym_reverb_send[i];
-    }
-    for (int i = 0; i < 16; ++i) {
-        pcm_volume[i] = defaults.pcm_volume[i];
-        pcm_send[i] = defaults.pcm_send[i];
-        pcm_reverb_send[i] = defaults.pcm_reverb_send[i];
-    }
-    chorus_enabled = defaults.chorus_enabled;
-    chorus_rate = defaults.chorus_rate;
-    chorus_depth = defaults.chorus_depth;
-    chorus_delay = defaults.chorus_delay;
-    chorus_feedback = defaults.chorus_feedback;
-    chorus_mix = defaults.chorus_mix;
-    reverb_enabled = defaults.reverb_enabled;
-    reverb_decay = defaults.reverb_decay;
-    reverb_damping = defaults.reverb_damping;
-    reverb_predelay = defaults.reverb_predelay;
-    reverb_mix = defaults.reverb_mix;
+    copy_music_mix(*this, defaults);
     solo_mask = 0;
 }
 

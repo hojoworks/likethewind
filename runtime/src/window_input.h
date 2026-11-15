@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "likethewind/machine.h"
-#include "likethewind/menu.h"
 #include "likethewind/settings.h"
 
 namespace likethewind {
@@ -86,8 +85,6 @@ int update_wheel(int wheel, SteeringState &state, int ax, bool left, bool right,
 void apply_input(Machine &m, const Uint8 *keys, const PadState &pad,
                  bool &gear, bool &prevGear, SteeringState &steer_state,
                  const Settings &s, bool menu_open);
-bool menu_key_from_sym(SDL_Keycode sym, MenuKey &k);
-bool menu_key_from_button(Uint8 b, MenuKey &k);
 int inputdevicetest();
 
 } // namespace likethewind

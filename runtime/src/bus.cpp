@@ -6,7 +6,6 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <utility>
 
 namespace likethewind {
@@ -121,9 +120,11 @@ static void divide_315_5249(uint16_t *r, int mode) {
     // Following MAME's sega_315_5249_divider_device::execute().
     r[6] = 0;
     if (mode == 0) {
-        const int32_t dividend = (int32_t)(((uint32_t)r[0] << 16) | r[1]);
+        // Use a 64-bit dividend so INT32_MIN / -1 does not overflow (and trap
+        // on x86) before the saturation below can clamp it.
+        const int64_t dividend = (int32_t)(((uint32_t)r[0] << 16) | r[1]);
         const int32_t divisor = (int16_t)r[2];
-        int32_t quotient;
+        int64_t quotient;
         if (divisor == 0) {
             quotient = dividend;
             r[6] |= 0x4000;

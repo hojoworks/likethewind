@@ -4,4 +4,4 @@
 int menutest();
 int inputtest();
 
-#endif
+#endif // LIKETHEWIND_MENU_TEST_H

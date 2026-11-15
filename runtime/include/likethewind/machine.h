@@ -8,6 +8,7 @@
 #ifndef LIKETHEWIND_MACHINE_H
 #define LIKETHEWIND_MACHINE_H
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <fstream>
@@ -56,7 +57,7 @@ public:
     void restore_scores();
     void clear_nvram();
     void set_code(int cpu, const ng_func_entry_t *table, size_t count);
-    void clear_code(int cpu) { fn_[cpu].assign(fn_[cpu].size(), nullptr); }
+    void clear_code(int cpu) { std::fill(fn_[cpu].begin(), fn_[cpu].end(), nullptr); }
     ng_func_t function_at(int cpu, uint32_t address) const {
         return (address / 2 < fn_[cpu].size()) ? fn_[cpu][address / 2] : nullptr;
     }
@@ -89,11 +90,11 @@ public:
     bool display_enable = true;
     bool rotation_swapped = false;
 
-    // Inputs (0..255 analogue, active-high buttons).
     // 315-5248 multiplier and 315-5249 divider, one pair per 68000.
     uint16_t mult_regs[3][2] = {};
     uint16_t div_regs[3][7] = {};
 
+    // Inputs (0..255 analogue, active-high buttons).
     uint8_t in_wheel = 0x80;   // centred paddle
     uint8_t in_gas = 0x00;     // released pedals, matching MAME's defaults
     uint8_t in_brake = 0x00;
@@ -229,7 +230,7 @@ private:
     std::ofstream sound_log_;
     std::ofstream sample_log_;
     void write_sound_log(const char *kind, const char *value);
-    void write_sample_log(int voice, int group, uint8_t sample);
+    void write_sample_log(int voice, int group, uint8_t sample_id);
     static void sample_log_callback(void *user, int voice, int group,
                                     uint8_t sample);
     std::vector<ng_func_t> fn_[CPU_COUNT];
@@ -254,4 +255,4 @@ extern bool ff0e_tap;      // log accesses to the shared boot handshake byte 0xF
 
 } // namespace likethewind
 
-#endif
+#endif // LIKETHEWIND_MACHINE_H

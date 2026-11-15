@@ -1,4 +1,8 @@
 #include "likethewind/menu_test.h"
+
+#include <cstdio>
+
+#ifdef LIKETHEWIND_HAVE_SDL
 #include "likethewind/machine.h"
 #include "likethewind/menu.h"
 #include "likethewind/settings.h"
@@ -6,7 +10,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <cstdio>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -72,6 +75,7 @@ int inputtest() {
 }
 
 int menutest() {
+    int failures = 0;
     Settings settings;
     Menu menu(settings);
     menu.toggle();
@@ -286,6 +290,7 @@ int menutest() {
         !loaded.device_enabled("test-disabled-device");
     std::printf("menutest: raw binding round-trip %s\n",
                 raw_binding_roundtrip ? "PASS" : "FAIL");
+    if (!raw_binding_roundtrip) ++failures;
     const bool roundtrip = loaded_ok && raw_binding_roundtrip &&
                            loaded.dip_a() == settings.dip_a() &&
                            loaded.dip_b() == settings.dip_b() &&
@@ -341,8 +346,10 @@ int menutest() {
                            steering_setup_ok &&
                            mixer_roundtrip;
     std::printf("menutest: settings round-trip %s\n", roundtrip ? "PASS" : "FAIL");
+    if (!roundtrip) ++failures;
     std::printf("menutest: controller bindings %s\n",
                 gamepad_binding_ok ? "PASS" : "FAIL");
+    if (!gamepad_binding_ok) ++failures;
     {
         Settings axis_settings;
         Menu axis_menu(axis_settings);
@@ -357,13 +364,14 @@ int menutest() {
                              axis_settings.pad_gas_axis_invert;
         std::printf("menutest: axis bindings %s\n",
                     axis_ok ? "PASS" : "FAIL");
+        if (!axis_ok) ++failures;
     }
     {
         Settings device_settings;
         Menu device_menu(device_settings);
         device_menu.set_input_devices({
-            {"guid-wheel", "Simagic Wheel", false},
-            {"guid-pad", "Xbox Pad", true},
+            {"guid-wheel", "Simagic Wheel"},
+            {"guid-pad", "Xbox Pad"},
         });
         device_menu.toggle();
         device_menu.set_selection(2);   // CONTROLLER BINDINGS
@@ -375,6 +383,7 @@ int menutest() {
         const bool enabled = device_settings.device_enabled("guid-wheel");
         std::printf("menutest: device enable/disable %s\n",
                     disabled && enabled ? "PASS" : "FAIL");
+        if (!(disabled && enabled)) ++failures;
     }
     {
         Settings delete_settings;
@@ -397,6 +406,7 @@ int menutest() {
             delete_settings.pad_raw[PadBindGasAxis] == 0;
         std::printf("menutest: clear assignment %s\n",
                     cleared ? "PASS" : "FAIL");
+        if (!cleared) ++failures;
     }
     {
         Settings monitor_settings;
@@ -414,6 +424,7 @@ int menutest() {
         monitor_ok = monitor_ok && monitor_settings.monitor == 0;
         std::printf("menutest: monitor selection %s\n",
                     monitor_ok ? "PASS" : "FAIL");
+        if (!monitor_ok) ++failures;
     }
     {
         Settings wheel_settings;
@@ -428,6 +439,7 @@ int menutest() {
                               !rumble_result.rumble_test;
         std::printf("menutest: wheel-mode rumble disabled %s\n",
                     wheel_ok ? "PASS" : "FAIL");
+        if (!wheel_ok) ++failures;
     }
     {
         Settings clear_settings;
@@ -440,6 +452,7 @@ int menutest() {
         const bool clear_ok = !first.clear_nvram && second.clear_nvram;
         std::printf("menutest: clear nvram confirmation %s\n",
                     clear_ok ? "PASS" : "FAIL");
+        if (!clear_ok) ++failures;
     }
     {
         Machine course_machine;
@@ -484,8 +497,10 @@ int menutest() {
         const bool no_wheel_nudge = course_machine.in_wheel == 0x80;
         std::printf("menutest: course-select one press per course %s\n",
                     one_step && two_steps && one_step_right ? "PASS" : "FAIL");
+        if (!(one_step && two_steps && one_step_right)) ++failures;
         std::printf("menutest: racing-wheel nudge disable %s\n",
                     no_wheel_nudge ? "PASS" : "FAIL");
+        if (!no_wheel_nudge) ++failures;
         steering_setup_ok = steering_setup_ok && one_step && two_steps &&
                             one_step_right && no_wheel_nudge;
     }
@@ -520,12 +535,14 @@ int menutest() {
                     carousel_right && carousel_next && carousel_back
                         ? "PASS"
                         : "FAIL");
+        if (!(carousel_right && carousel_next && carousel_back)) ++failures;
         steering_setup_ok =
             steering_setup_ok && carousel_right && carousel_next &&
             carousel_back;
     }
     std::printf("menutest: steering setup %s\n",
                 steering_setup_ok ? "PASS" : "FAIL");
+    if (!steering_setup_ok) ++failures;
 
     // The MIXER tab's RESET button restores every trim, send, chorus value and
     // clears solo.
@@ -590,6 +607,7 @@ int menutest() {
             reset_ok = false;
     }
     std::printf("menutest: mixer reset %s\n", reset_ok ? "PASS" : "FAIL");
+    if (!reset_ok) ++failures;
 
     {
         // The mixer must be explicitly enabled before arrows/buttons can edit.
@@ -610,6 +628,7 @@ int menutest() {
         const bool unlocked_edits = lock_settings.ym_volume[0] == before + 5;
         std::printf("menutest: mixer safety lock %s\n",
                     (stayed_locked && unlocked_edits) ? "PASS" : "FAIL");
+        if (!(stayed_locked && unlocked_edits)) ++failures;
     }
 
     // Multiple solo: adding another channel keeps the first; each is toggled
@@ -629,6 +648,7 @@ int menutest() {
     const bool solo_manual = solo_settings.solo_mask == (1u << 0);
     std::printf("menutest: multi solo %s\n",
                 (solo_multi && solo_manual) ? "PASS" : "FAIL");
+    if (!(solo_multi && solo_manual)) ++failures;
 
     // A/B monitor switch and the plate-reverb submenu.
     Settings fx_settings;
@@ -659,6 +679,7 @@ int menutest() {
         fx_settings.ym_reverb_send[0] == 5 && fx_settings.ym_send[0] == 0;
     std::printf("menutest: mixer A/B and reverb %s\n",
                 (ab_on && ab_off && rev_on && send2_ok) ? "PASS" : "FAIL");
+    if (!(ab_on && ab_off && rev_on && send2_ok)) ++failures;
 
     // SOUND TEST: open the Audio tab's track list, pick Poker Face, leave.
     Settings st_settings;
@@ -673,6 +694,7 @@ int menutest() {
     st_menu.key(MenuKey::Back);
     const bool st_ok = st_open && !st_menu.sound_test() && play.sound_cmd == 0x94;
     std::printf("menutest: sound test %s\n", st_ok ? "PASS" : "FAIL");
+    if (!st_ok) ++failures;
 
     // Audio mix preset: stock -> Hojo's per-song mixes and back.
     Settings preset_settings;
@@ -686,6 +708,7 @@ int menutest() {
     const bool preset_stock = preset_settings.audio_preset == 0;
     std::printf("menutest: audio mix preset %s\n",
                 (preset_hojo && preset_stock) ? "PASS" : "FAIL");
+    if (!(preset_hojo && preset_stock)) ++failures;
 
     // Mixer build: two tabs, sound test first, per-song mixes round-trip.
     Settings mix_settings;
@@ -726,6 +749,7 @@ int menutest() {
     const bool mixer_build_ok =
         mix_open && mix_play.sound_cmd == 0x94 && mix_tab && mix_back && mix_roundtrip;
     std::printf("menutest: mixer build %s\n", mixer_build_ok ? "PASS" : "FAIL");
+    if (!mixer_build_ok) ++failures;
 
     // Exercise every key on every tab so navigation/value clamping cannot walk
     // off the end of a list.
@@ -733,9 +757,23 @@ int menutest() {
     Menu fuzz(fuzz_settings);
     fuzz.toggle();
     for (int i = 0; i < 1000; i++)
-        fuzz.key((MenuKey)(i % 12));
+        fuzz.key((MenuKey)(i % 13));
     std::vector<uint32_t> fuzz_px((size_t)Machine::kVisibleWidth * Machine::kVisibleLines, 0xFF000000u);
     fuzz.draw(fuzz_px.data(), Machine::kVisibleWidth, Machine::kVisibleLines);
     std::printf("menutest: key fuzz ok\n");
-    return 0;
+    return failures ? 1 : 0;
 }
+
+#else
+
+int inputtest() {
+    std::fprintf(stderr, "inputtest: build has no SDL support\n");
+    return 1;
+}
+
+int menutest() {
+    std::fprintf(stderr, "menutest: build has no SDL support\n");
+    return 1;
+}
+
+#endif // LIKETHEWIND_HAVE_SDL

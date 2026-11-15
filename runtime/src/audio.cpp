@@ -1468,8 +1468,10 @@ uint32_t Audio::collision_events() const {
     return impl_ ? impl_->collision_events : 0;
 }
 
-const int16_t *Audio::samples() const { return impl_->out.data(); }
-size_t Audio::sample_count() const { return impl_->out.size(); }
+const int16_t *Audio::samples() const {
+    return impl_ ? impl_->out.data() : nullptr;
+}
+size_t Audio::sample_count() const { return impl_ ? impl_->out.size() : 0; }
 
 uint16_t Audio::z80_pc() const { return impl_ ? impl_->cpu.pc : 0; }
 uint64_t Audio::z80_cycles() const {

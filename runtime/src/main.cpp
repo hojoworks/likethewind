@@ -1,5 +1,5 @@
 /*
- * main.cpp â€” CLI and headless host.
+ * main.cpp — CLI and headless host.
  *
  * The generated translation units expose one table per CPU. They are weak so
  * the executable still links while a build only has the synthetic fixture.
@@ -242,11 +242,11 @@ static void usage(const char *argv0) {
     std::printf("usage: %s [--rom DIR] [--play] [--menu] [--widescreen] [--scale N] [--verbose] "
                 "[--frames N] [--auto-start] [--autoplay] [--start-only] [--coin-only] [--coin-frame N] "
                 "[--push-start] [--dip-a N] [--dip-b N] "
-                "[--trace FILE] [--trace-line N] [--dump-ram PREFIX] "
-                "[--dump-line N] [--tap-ff0e] [--steer N] "
+                "[--trace FILE] [--trace-line N] [--dump-ram PREFIX] [--dump-fb PREFIX] "
+                "[--dump-line N] [--tap-ff0e] [--bsp-tap] [--steer N] "
                 "[--audio-trace] [--wav FILE] [--sound-log FILE] [--sample-log FILE] "
-                "[--screenshot FILE] [--slice N] [--forward] [--interp] "
-                "[--coverage FILE] "
+                "[--screenshot FILE] [--slice N] [--forward] [--interp] [--interp-suby] "
+                "[--coverage FILE] [--headless] "
                 "[--selftest] [--videotest] [--fallbacktest] [--windowtest] [--menutest] [--inputtest] "
                 "[--inputdevicetest] [--crash-test] [--crash-test-frame N] [--crash-test-cpp]\n",
                 argv0);
@@ -349,7 +349,7 @@ int main(int argc, char **argv) {
         else if (!std::strcmp(argv[i], "--rom") && i + 1 < argc) romdir = argv[++i];
         else if (!std::strcmp(argv[i], "--frames") && i + 1 < argc) frames = std::atoi(argv[++i]);
         else if (!std::strcmp(argv[i], "--screenshot") && i + 1 < argc) shot = argv[++i];
-        else if (!std::strcmp(argv[i], "--headless")) { /* headless is the default for now */ }
+        else if (!std::strcmp(argv[i], "--headless")) { /* accepted; headless is the default */ }
         else if (!std::strcmp(argv[i], "--help") || !std::strcmp(argv[i], "-h")) { usage(argv[0]); return 0; }
         else { std::fprintf(stderr, "unknown option: %s\n", argv[i]); usage(argv[0]); return 2; }
     }

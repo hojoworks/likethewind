@@ -1,4 +1,5 @@
-#pragma once
+#ifndef LIKETHEWIND_AUDIO_H
+#define LIKETHEWIND_AUDIO_H
 
 #include <cstdint>
 #include <memory>
@@ -57,3 +58,5 @@ private:
 };
 
 } // namespace likethewind
+
+#endif // LIKETHEWIND_AUDIO_H

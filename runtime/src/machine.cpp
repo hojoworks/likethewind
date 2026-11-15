@@ -4,7 +4,9 @@
 #include "likethewind/machine.h"
 #include "likethewind/audio.h"
 #include "likethewind/bus.h"
+#include "likethewind/bytes.h"
 #include "likethewind/fallback.h"
+#include "likethewind/palette.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -20,14 +22,22 @@ static bool read_file(const std::string &path, std::vector<uint8_t> &out, size_t
     std::ifstream f(path, std::ios::binary);
     if (!f) { error = "cannot open " + path; return false; }
     f.seekg(0, std::ios::end);
-    std::streamoff n = f.tellg();
+    const std::streamoff n = f.tellg();
     f.seekg(0, std::ios::beg);
+    if (n < 0) {
+        error = "cannot read " + path;
+        return false;
+    }
     if (expect && (size_t)n != expect) {
         error = path + ": expected " + std::to_string(expect) + " bytes, got " + std::to_string((long long)n);
         return false;
     }
     out.resize((size_t)n);
-    f.read((char *)out.data(), n);
+    if (n > 0) f.read((char *)out.data(), n);
+    if (!f) {
+        error = "cannot read " + path;
+        return false;
+    }
     return true;
 }
 
@@ -114,8 +124,7 @@ void Machine::build_pages() {
 
 static uint32_t rd32(const std::vector<uint8_t> &v, size_t at) {
     if (at + 3 >= v.size()) return 0;
-    return ((uint32_t)v[at] << 24) | ((uint32_t)v[at + 1] << 16) |
-           ((uint32_t)v[at + 2] << 8) | v[at + 3];
+    return read_be32(v.data() + at);
 }
 
 void Machine::reset_cpu(int i) {
@@ -155,7 +164,7 @@ bool Machine::load_nvram(const std::string &path) {
     if (!f) return false;
     std::memset(subx_backup, 0, sizeof(subx_backup));
     f.read((char *)subx_backup, (std::streamsize)sizeof(subx_backup));
-    return true;
+    return f.gcount() == (std::streamsize)sizeof(subx_backup);
 }
 
 bool Machine::save_nvram(const std::string &path) const {
@@ -365,16 +374,13 @@ void Machine::sample_log_callback(void *user, int voice, int group,
     static_cast<Machine *>(user)->write_sample_log(voice, group, sample);
 }
 
-void Machine::write_sample_log(int voice, int group, uint8_t sample) {
+void Machine::write_sample_log(int voice, int group, uint8_t sample_id) {
     if (!sample_log_.is_open()) return;
-    const auto word = [&](int offset) {
-        return (uint16_t)((shared[offset] << 8) | shared[offset + 1]);
-    };
-    const int mode = word(0xE09C);
-    const int character = word(0xE310);
-    const int speed = word(0xEA12);
+    const int mode = read_be16(shared + 0xE09C);
+    const int character = read_be16(shared + 0xE310);
+    const int speed = read_be16(shared + 0xEA12);
     char sample_hex[8];
-    std::snprintf(sample_hex, sizeof(sample_hex), "%02X", sample);
+    std::snprintf(sample_hex, sizeof(sample_hex), "%02X", sample_id);
     sample_log_ << "sample," << frame << ',' << mode << ',' << character << ','
                 << speed << ',' << (int)in_wheel << ',' << (int)in_gas << ','
                 << (int)in_brake << ',' << (int)in_general << ',' << voice << ','
@@ -384,12 +390,9 @@ void Machine::write_sample_log(int voice, int group, uint8_t sample) {
 
 void Machine::write_sound_log(const char *kind, const char *value) {
     if (!sound_log_.is_open()) return;
-    const auto word = [&](int offset) {
-        return (uint16_t)((shared[offset] << 8) | shared[offset + 1]);
-    };
-    const int mode = word(0xE09C);
-    const int character = word(0xE310);
-    const int speed = word(0xEA12);
+    const int mode = read_be16(shared + 0xE09C);
+    const int character = read_be16(shared + 0xE310);
+    const int speed = read_be16(shared + 0xEA12);
     sound_log_ << kind << ',' << frame << ',' << mode << ',' << character << ','
                << speed << ',' << (int)in_wheel << ',' << (int)in_gas << ','
                << (int)in_brake << ',' << (int)in_general << ','
@@ -619,12 +622,10 @@ void Machine::screenshot_ppm(const std::string &path) {
     f << "P6\n" << view_width << " " << kVisibleLines << "\n255\n";
     for (int y = 0; y < kVisibleLines; y++) {
         for (int x = 0; x < view_width; x++) {
-            uint16_t v = palette[screen[y * kRenderWidth + x] & 0x3FFF];
-            uint8_t r = (uint8_t)(((v & 0x0F) << 1) | ((v >> 12) & 1));
-            uint8_t g = (uint8_t)((((v >> 4) & 0x0F) << 1) | ((v >> 13) & 1));
-            uint8_t b = (uint8_t)((((v >> 8) & 0x0F) << 1) | ((v >> 14) & 1));
-            uint8_t rgb[3] = {(uint8_t)(r * 255 / 31), (uint8_t)(g * 255 / 31), (uint8_t)(b * 255 / 31)};
-            f.write((char *)rgb, 3);
+            const uint32_t rgb = palette_rgb(palette[screen[y * kRenderWidth + x] & 0x3FFF]);
+            const uint8_t bytes[3] = {(uint8_t)(rgb >> 16), (uint8_t)(rgb >> 8),
+                                      (uint8_t)rgb};
+            f.write((char *)bytes, 3);
         }
     }
 }

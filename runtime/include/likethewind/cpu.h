@@ -3,14 +3,13 @@
  * recompiled code is lowered to.
  *
  * One register file (ng_cpu) is shared by recompiled code and by the
- * Musashi interpreter used as fallback; exec.c copies it in and out of
- * Musashi at each hand-over. Condition codes live as separate 0/1 bytes
+ * Musashi interpreter used as fallback; fallback.cpp copies it in and out
+ * of Musashi at each hand-over. Condition codes live as separate 0/1 bytes
  * so the C compiler can drop dead flag writes inside a routine.
  *
  * The helpers reproduce Musashi's results exactly, including the
  * undocumented flag behaviour of ABCD/SBCD/NBCD, DIVx overflow and CHK,
- * because Musashi is the oracle the conformance harness compares against
- * conformance rules.
+ * because Musashi is the oracle the conformance harness compares against.
  */
 #ifndef LIKETHEWIND_CPU_H
 #define LIKETHEWIND_CPU_H
@@ -280,4 +279,4 @@ static inline bool ng_chk(uint16_t bound16, uint16_t v16) {
 #ifdef __cplusplus
 }
 #endif
-#endif
+#endif // LIKETHEWIND_CPU_H

@@ -54,14 +54,13 @@ void fallback_init() {
     g_musashi_ready = true;
 }
 
-bool fallback_step() {
+void fallback_step() {
     if (!g_musashi_ready) fallback_init();
     to_musashi();
     m68k_set_irq(0);                 // the dispatcher takes interrupts itself
     int cycles = m68k_execute(1);
     ng_cycles += cycles;
     from_musashi();
-    return true;
 }
 
 } // namespace likethewind
