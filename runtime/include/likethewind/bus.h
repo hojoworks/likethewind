@@ -38,12 +38,12 @@ static inline uint16_t ng_r16(uint32_t a) {
     uint8_t *p = ng_rmap[a >> 16];
     if (p) {
         p += a & 0xFFFF;
-        return (uint16_t)((p[0] << 8) | p[1]);
+        return NG_CAST(uint16_t, (p[0] << 8) | p[1]);
     }
     return ng_r16_slow(a);
 }
 static inline uint32_t ng_r32(uint32_t a) {
-    return ((uint32_t)ng_r16(a) << 16) | ng_r16(a + 2);
+    return (NG_CAST(uint32_t, ng_r16(a)) << 16) | ng_r16(a + 2);
 }
 static inline void ng_w8(uint32_t a, uint8_t v) {
     a &= 0x1FFFFF;
@@ -55,15 +55,15 @@ static inline void ng_w16(uint32_t a, uint16_t v) {
     uint8_t *p = ng_wmap[a >> 16];
     if (p) {
         p += a & 0xFFFF;
-        p[0] = (uint8_t)(v >> 8);
-        p[1] = (uint8_t)v;
+        p[0] = NG_CAST(uint8_t, v >> 8);
+        p[1] = NG_CAST(uint8_t, v);
     } else {
         ng_w16_slow(a, v);
     }
 }
 static inline void ng_w32(uint32_t a, uint32_t v) {
-    ng_w16(a, (uint16_t)(v >> 16));
-    ng_w16(a + 2, (uint16_t)v);
+    ng_w16(a, NG_CAST(uint16_t, v >> 16));
+    ng_w16(a + 2, NG_CAST(uint16_t, v));
 }
 
 /* The emulated stack. */
