@@ -33,10 +33,13 @@ constexpr int kOutFrames = 800;          // 48000 / 60
 constexpr float kVoiceHighPassHz = 175.0f;
 constexpr float kAnnouncerHighPassHz = 250.0f;
 constexpr float kAnnouncerPostGainDb = -1.0f;
-constexpr float kFemalePostGainDb = -1.25f;
-// Nudge the restored female passing lines down relative to the other female
-// reactions so they sit back in the mix.
-constexpr float kFemalePassingPostGainDb = -0.75f;
+// Male and female player lines share one post gain per category. These are the
+// midpoints after the +0.25 dB female lift: passing (0.0 + -0.75) / 2 and
+// other reactions (2.0 + 0.0) / 2.
+constexpr float kPlayerPassingPostGainDb = -0.375f;
+constexpr float kPlayerVoicePostGainDb = 1.0f;
+constexpr float kEnemyPassingPostGainDb = 1.0f;
+constexpr float kEnemyVoicePostGainDb = 2.0f;
 // The second announcer line after course selection ("Do your best and good
 // luck") sits a little too far forward over the music.
 constexpr float kCourseSelectAnnouncerPostGainDb = -1.5f;
@@ -755,22 +758,20 @@ struct Audio::Impl {
         if (g_sample_event[sample] == 2 || g_sample_event[sample] == 3)
             ++collision_events;
         v.voice_effect = (group == 1 && is_voice_effect(sample));
-        const bool enemy_passing =
-            g_sample_gender[sample] == 4 && g_sample_event[sample] == 1;
-        const bool male_passing =
-            g_sample_gender[sample] == 1 && g_sample_event[sample] == 1;
-        const bool female_passing =
-            g_sample_gender[sample] == 2 && g_sample_event[sample] == 1;
-        float gain_db = male_passing ? 0.0f
-                              : enemy_passing ? 1.0f
-                              : g_sample_gender[sample] == 1
-                                  ? 2.0f
-                              : g_sample_gender[sample] == 2
-                                  ? 1.0f + kFemalePostGainDb
-                              : g_sample_gender[sample] == 3
-                                  ? 2.0f + kAnnouncerPostGainDb
-                                  : 2.0f;
-        if (female_passing) gain_db += kFemalePassingPostGainDb;
+        const int gender = g_sample_gender[sample];
+        const bool passing = g_sample_event[sample] == 1;
+        float gain_db;
+        if (gender == 3) {
+            gain_db = 2.0f + kAnnouncerPostGainDb;
+        } else if (gender == 4) {
+            gain_db = passing ? kEnemyPassingPostGainDb
+                              : kEnemyVoicePostGainDb;
+        } else if (gender == 1 || gender == 2) {
+            gain_db = passing ? kPlayerPassingPostGainDb
+                              : kPlayerVoicePostGainDb;
+        } else {
+            gain_db = kEnemyVoicePostGainDb;
+        }
         if (sample == kCourseSelectAnnouncerSample)
             gain_db += kCourseSelectAnnouncerPostGainDb;
         v.voice_gain = v.voice_effect
