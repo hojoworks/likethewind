@@ -314,7 +314,10 @@ void Machine::render_scanline(int y) {
         sx = std::clamp(sx, 0, 511);
         const bool y_in_source = raw_sy >= 0 && raw_sy < 512;
         const int sy = std::clamp(raw_sy, 0, 511);
-        uint16_t pix = y_in_source ? y_fb[(size_t)sy * 512 + sx] : 0xFFFF;
+        uint16_t pix = y_in_source
+                           ? y_fb[static_cast<std::size_t>(sy) * 512 +
+                                  static_cast<std::size_t>(sx)]
+                           : 0xFFFF;
         uint16_t value;
         uint8_t pri;
 
@@ -331,7 +334,8 @@ void Machine::render_scanline(int y) {
         // lower than the rotated layer's priority.
         int bx = x + view_x0;
         if (bx >= 0 && bx < kVisibleWidth) {
-            uint16_t sp = b_fb[(size_t)y * kRenderWidth + bx];
+            uint16_t sp = b_fb[static_cast<std::size_t>(y) * kRenderWidth +
+                              static_cast<std::size_t>(bx)];
             if (sp != 0xFFFF) {
                 int spri = (sp >> 11) & 0x1E;
                 if (spri < (pri & 0x1F)) {

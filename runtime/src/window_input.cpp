@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 
 namespace likethewind {
@@ -184,8 +185,9 @@ void read_pad_state(const InputDevices &devices, const Settings &s,
     out.connected = !devices.empty();
     const std::string primary = devices.primary_guid();
     auto bound_guid = [&](int action) {
-        std::string guid = s.pad_device[action];
-        if (guid.empty() && !s.pad_raw[action]) guid = primary;
+        const auto slot = static_cast<std::size_t>(action);
+        std::string guid = s.pad_device[slot];
+        if (guid.empty() && !s.pad_raw[slot]) guid = primary;
         return guid;
     };
     auto enabled = [&](int action) {

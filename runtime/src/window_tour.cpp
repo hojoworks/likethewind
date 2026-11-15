@@ -31,7 +31,7 @@ void SpecialTourState::reset() {
 
 bool SpecialTourState::course_all_first(int c) const {
     if (c < 0 || c >= kCourses) return false;
-    for (int8_t place : places[c])
+    for (int8_t place : places[static_cast<std::size_t>(c)])
         if (place != 0) return false;
     return true;
 }

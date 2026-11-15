@@ -37,7 +37,8 @@ void stop_rumble(SDL_GameController *pad, RumbleState &state) {
 // per-effect strength overrides.
 Uint16 rumble_level(float value, int strength) {
     const float scaled = std::clamp(value, 0.0f, 1.0f) *
-                         (std::clamp(strength, 0, 100) / 100.0f);
+                         (static_cast<float>(std::clamp(strength, 0, 100)) /
+                          100.0f);
     return (Uint16)(scaled * 65535.0f);
 }
 
@@ -219,7 +220,8 @@ void update_rumble(SDL_GameController *pad, bool supported, const Settings &s,
         const int32_t dxy = (int32_t)read_be32(rot + 0x3F8 * 2);
         yaw_deg = std::abs((float)std::atan2((double)dxy, (double)dxx)) *
                   57.2957795f;
-        const float speed_f = std::clamp(speed / 240.0f, 0.0f, 1.0f);
+        const float speed_f =
+            std::clamp(static_cast<float>(speed) / 240.0f, 0.0f, 1.0f);
         const float gas_f =
             std::clamp((float)m.in_gas / 255.0f, 0.0f, 1.0f);
 
@@ -299,7 +301,8 @@ void update_rumble(SDL_GameController *pad, bool supported, const Settings &s,
         const float brake_f =
             std::clamp((float)m.in_brake / 255.0f, 0.0f, 1.0f);
         const float steer_norm = std::clamp(
-            std::abs((int)m.in_wheel - 0x80) / 96.0f, 0.0f, 1.0f);
+            static_cast<float>(std::abs((int)m.in_wheel - 0x80)) / 96.0f,
+            0.0f, 1.0f);
         const float yaw_turn =
             std::clamp((yaw_deg - 1.0f) / 6.0f, 0.0f, 1.0f);
         const float brake_turn =
@@ -379,10 +382,11 @@ void update_rumble(SDL_GameController *pad, bool supported, const Settings &s,
                      "launch=%d bump=%d corner=%.2f str=%d low=%u high=%u\n",
                      mode, racing ? 1 : 0, enabled ? 1 : 0, speed,
                      (int)m.in_gas, (int)m.in_brake, (int)m.in_wheel,
-                     yaw_deg, state.intro_frames,
+                     static_cast<double>(yaw_deg), state.intro_frames,
                      state.turn_active ? 1 : 0, state.turn_hold,
                      state.launch_frames, state.throttle_bump_frames,
-                     state.corner, s.rumble_strength, (unsigned)low_value,
+                     static_cast<double>(state.corner), s.rumble_strength,
+                     (unsigned)low_value,
                      (unsigned)high_value);
     }
     const bool nonzero = low_value != 0 || high_value != 0;

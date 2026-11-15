@@ -180,8 +180,11 @@ static int videotest() {
     machine.render_frame();
     bool any = false;
     for (int y = 0; y < Machine::kVisibleLines && !any; y++)
-        for (int x = 0; x < machine.view_width; x++)
-            if (machine.screen[y * Machine::kRenderWidth + x]) { any = true; break; }
+        for (int x = 0; x < machine.view_width; x++) {
+            const auto index = static_cast<size_t>(y) * Machine::kRenderWidth +
+                               static_cast<size_t>(x);
+            if (machine.screen[index]) { any = true; break; }
+        }
     machine.screenshot_ppm("work/videotest.ppm");
     std::printf("videotest: %s (view %dx%d)\n", any ? "PASS" : "FAIL",
                 machine.view_width, Machine::kVisibleLines);

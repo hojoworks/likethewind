@@ -296,7 +296,8 @@ uint8_t Machine::read_io(uint32_t a) {
         case 7: return 0x00;
         }
     }
-    if (reg >= 8 && reg <= 0xB) return "SEGA"[reg - 8];
+    if (reg >= 8 && reg <= 0xB)
+        return static_cast<uint8_t>("SEGA"[reg - 8]);
     if (reg == 0xD || reg == 0xF) return io_direction;
     return 0xFF;
 }

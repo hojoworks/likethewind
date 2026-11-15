@@ -11,11 +11,18 @@ namespace menu_internal {
 inline constexpr int kTabCount = 6;
 inline constexpr const char *kOnOff[2] = {"OFF", "ON"};
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+#endif
 inline std::string fmt(const char *f, int v) {
     char b[64];
     std::snprintf(b, sizeof(b), f, v);
     return b;
 }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 inline std::string fmt_fps(double v) {
     char b[64];

@@ -4,11 +4,14 @@
 #include "likethewind/settings.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdlib>
 #include <fstream>
 #include <string>
 
 namespace likethewind {
+
+static std::size_t idx(int i) { return static_cast<std::size_t>(i); }
 
 static int as_int(const std::string &s) {
     return (int)std::strtol(s.c_str(), nullptr, 10);
@@ -99,13 +102,13 @@ void Settings::clamp() {
     steer_rebound = std::clamp(steer_rebound, 0, 32);
     steer_rebound_speed = std::clamp(steer_rebound_speed, 1, 10);
     for (int i = 0; i < PadBindCount; ++i)
-        pad_raw[i] = pad_raw[i] ? 1 : 0;
+        pad_raw[idx(i)] = pad_raw[idx(i)] ? 1 : 0;
     auto clamp_button = [&](int &value, int index) {
-        const int max = pad_raw[index] ? 127 : 20;
+        const int max = pad_raw[idx(index)] ? 127 : 20;
         value = std::clamp(value, -1, max);
     };
     auto clamp_axis = [&](int &value, int index) {
-        const int max = pad_raw[index] ? 127 : 5;
+        const int max = pad_raw[idx(index)] ? 127 : 5;
         value = std::clamp(value, -1, max);
     };
     clamp_button(pad_steer_left, PadBindSteerLeft);
@@ -323,15 +326,15 @@ bool Settings::load(const std::string &path) {
             for (int i = 0; i < PadBindCount; ++i) {
                 const std::string prefix = kPadBindKeys[i];
                 if (key == prefix + "_device") {
-                    pad_device[i] = trim(val);
+                    pad_device[idx(i)] = trim(val);
                     break;
                 }
                 if (key == prefix + "_device_name") {
-                    pad_device_name[i] = trim(val);
+                    pad_device_name[idx(i)] = trim(val);
                     break;
                 }
                 if (key == prefix + "_raw") {
-                    pad_raw[i] = n != 0;
+                    pad_raw[idx(i)] = n != 0;
                     break;
                 }
             }
@@ -424,9 +427,9 @@ void Settings::save(const std::string &path) const {
       << "racing_wheel=" << (racing_wheel ? 1 : 0) << "\n"
       << "auto_gear=" << (auto_gear ? 1 : 0) << "\n";
     for (int i = 0; i < PadBindCount; ++i) {
-        f << kPadBindKeys[i] << "_device=" << pad_device[i] << "\n";
-        f << kPadBindKeys[i] << "_device_name=" << pad_device_name[i] << "\n";
-        f << kPadBindKeys[i] << "_raw=" << (pad_raw[i] ? 1 : 0) << "\n";
+        f << kPadBindKeys[i] << "_device=" << pad_device[idx(i)] << "\n";
+        f << kPadBindKeys[i] << "_device_name=" << pad_device_name[idx(i)] << "\n";
+        f << kPadBindKeys[i] << "_raw=" << (pad_raw[idx(i)] ? 1 : 0) << "\n";
     }
     for (const std::string &guid : disabled_devices)
         f << "disabled_device=" << guid << "\n";

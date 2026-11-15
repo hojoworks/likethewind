@@ -12,9 +12,10 @@
 namespace likethewind {
 
 static inline uint32_t palette_rgb(uint16_t v) {
-    const uint32_t r = (((v & 0x0F) << 1) | ((v >> 12) & 1)) * 255 / 31;
-    const uint32_t g = ((((v >> 4) & 0x0F) << 1) | ((v >> 13) & 1)) * 255 / 31;
-    const uint32_t b = ((((v >> 8) & 0x0F) << 1) | ((v >> 14) & 1)) * 255 / 31;
+    const uint32_t value = v;
+    const uint32_t r = (((value & 0x0F) << 1) | ((value >> 12) & 1)) * 255 / 31;
+    const uint32_t g = ((((value >> 4) & 0x0F) << 1) | ((value >> 13) & 1)) * 255 / 31;
+    const uint32_t b = ((((value >> 8) & 0x0F) << 1) | ((value >> 14) & 1)) * 255 / 31;
     return (r << 16) | (g << 8) | b;
 }
 

@@ -53,7 +53,14 @@ void appendf(const char *fmt, ...) {
     if (g_log_len + 1 >= sizeof(g_log)) return;
     va_list ap;
     va_start(ap, fmt);
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+#endif
     const int n = std::vsnprintf(g_log + g_log_len, sizeof(g_log) - g_log_len, fmt, ap);
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
     va_end(ap);
     if (n > 0) {
         const size_t used = std::min<size_t>((size_t)n, sizeof(g_log) - g_log_len - 1);
@@ -138,6 +145,10 @@ SymFuncTableFn g_sym_table = nullptr;
 SymModBaseFn g_sym_base = nullptr;
 StackWalkFn g_stack_walk = nullptr;
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-function-type-mismatch"
+#endif
 void init_symbols() {
     g_dbghelp = LoadLibraryA("dbghelp.dll");
     if (!g_dbghelp) return;
@@ -162,6 +173,9 @@ void init_symbols() {
     }
     if (sym_init && sym_init(g_process, dir[0] ? dir : nullptr, TRUE)) g_sym_ready = true;
 }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 void append_symbol(DWORD64 addr, const char *prefix) {
     if (g_sym_ready && g_sym_from) {
@@ -308,6 +322,10 @@ struct MiniDumpExceptionInfo {
 const char *g_dump_stage = "";
 DWORD g_dump_error = 0;
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-function-type-mismatch"
+#endif
 bool write_minidump(const char *path, EXCEPTION_POINTERS *ep) {
     g_dump_stage = "";
     g_dump_error = 0;
@@ -347,6 +365,9 @@ bool write_minidump(const char *path, EXCEPTION_POINTERS *ep) {
     CloseHandle(h);
     return ok != FALSE;
 }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 void append_notes() {
     append("recent host notes:\n");
@@ -589,7 +610,14 @@ void crash_note(const char *fmt, ...) {
     char line[192] = {};
     va_list ap;
     va_start(ap, fmt);
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+#endif
     std::vsnprintf(line, sizeof(line), fmt, ap);
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
     va_end(ap);
     const LONG slot = (InterlockedIncrement(&g_note_index) - 1) % kNoteCount;
     std::snprintf(g_notes[slot], sizeof(g_notes[slot]), "%s", line);

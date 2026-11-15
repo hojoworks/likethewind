@@ -11,6 +11,7 @@
 #include "menu_internal.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdio>
 
 namespace likethewind {
@@ -18,6 +19,8 @@ namespace likethewind {
 using namespace menu_internal;
 
 namespace {
+
+std::size_t idx(int i) { return static_cast<std::size_t>(i); }
 
 const char *const kCoinage[16] = {
     "FREE PLAY N/A", "1C/1C 2/3", "1C/1C 4/5", "1C/1C 5/6",
@@ -58,14 +61,14 @@ std::string pad_axis_name(int axis, bool invert = false) {
 std::string pad_binding_display(const Settings &s, int action, int value,
                                 bool axis, bool invert = false) {
     if (action < 0 || action >= PadBindCount) return "UNBOUND";
-    const bool raw = s.pad_raw[action] != 0;
+    const bool raw = s.pad_raw[idx(action)] != 0;
     if (value < 0) return "UNBOUND";
     std::string control = raw ? (axis ? "AX " : "BTN ") + std::to_string(value)
                               : (axis ? pad_axis_name(value, invert)
                                       : pad_button_name(value));
     if (raw && axis && invert) control += "-";
-    if (s.pad_device[action].empty()) return control;
-    std::string name = s.pad_device_name[action];
+    if (s.pad_device[idx(action)].empty()) return control;
+    std::string name = s.pad_device_name[idx(action)];
     if (name.size() > (raw ? 16u : 12u)) name.resize(raw ? 16 : 12);
     if (name.empty()) name = raw ? "JOY" : "DEVICE";
     return name + " " + control;
@@ -92,9 +95,10 @@ std::vector<Menu::Item> Menu::items() const {
     switch (tab_) {
     case 0: {
         auto mark_disabled = [&](int index, int action) {
-            if (!settings_.pad_device[action].empty() &&
-                !settings_.device_enabled(settings_.pad_device[action]))
-                out[index].disabled = true;
+            const std::size_t slot = idx(action);
+            if (!settings_.pad_device[slot].empty() &&
+                !settings_.device_enabled(settings_.pad_device[slot]))
+                out[idx(index)].disabled = true;
         };
         if (input_page_ == 1) {
             constexpr size_t kMaxDevices = 10;
@@ -392,12 +396,12 @@ std::vector<Menu::Item> Menu::items() const {
 void Menu::change(int delta) {
     const std::vector<Item> list = items();
     if (sel_ < 0 || sel_ >= (int)list.size()) return;
-    const Item &it = list[sel_];
+    const Item &it = list[idx(sel_)];
     if (it.kind != Kind::Value) return;
     if (tab_ == 0 && input_page_ == 1 && it.id >= 200) {
         const int index = it.id - 200;
         if (index >= 0 && index < (int)input_devices_.size())
-            settings_.set_device_enabled(input_devices_[index].guid,
+            settings_.set_device_enabled(input_devices_[idx(index)].guid,
                                          delta > 0);
         return;
     }
@@ -528,12 +532,12 @@ void Menu::change(int delta) {
 void Menu::activate() {
     const std::vector<Item> list = items();
     if (sel_ < 0 || sel_ >= (int)list.size()) return;
-    const Item &it = list[sel_];
+    const Item &it = list[idx(sel_)];
     if (it.kind != Kind::Value) return;
     if (tab_ == 0 && input_page_ == 1 && it.id >= 200) {
         const int index = it.id - 200;
         if (index >= 0 && index < (int)input_devices_.size()) {
-            const std::string &guid = input_devices_[index].guid;
+            const std::string &guid = input_devices_[idx(index)].guid;
             settings_.set_device_enabled(guid,
                                          !settings_.device_enabled(guid));
         }
@@ -619,7 +623,7 @@ MenuResult Menu::key(MenuKey k) {
         const int start = std::clamp(sel_, 0, count - 1);
         for (int step = 1; step <= count; ++step) {
             const int i = ((start + delta * step) % count + count) % count;
-            if (list[i].kind != Kind::Info) {
+            if (list[idx(i)].kind != Kind::Info) {
                 sel_ = i;
                 return;
             }
@@ -652,7 +656,7 @@ MenuResult Menu::key(MenuKey k) {
         if (tab_ == 3 && audio_page_ == 1) {
             const std::vector<Item> list = items();
             if (sel_ >= 0 && sel_ < (int)list.size()) {
-                const int id = list[sel_].id;
+                const int id = list[idx(sel_)].id;
                 if (id >= 0x90 && id <= 0x97) r.sound_cmd = id;
                 else if (id == 0x100) r.sound_cmd = 0xFF;
                 else if (id == 0x101) {
@@ -663,8 +667,9 @@ MenuResult Menu::key(MenuKey k) {
             break;
         }
         const std::vector<Item> list = items();
-        if (sel_ >= 0 && sel_ < (int)list.size() && list[sel_].kind == Kind::Action) {
-            const int id = list[sel_].id;
+        if (sel_ >= 0 && sel_ < (int)list.size() &&
+            list[idx(sel_)].kind == Kind::Action) {
+            const int id = list[idx(sel_)].id;
             if (id == 0) r.reset = true;
             else if (id == 1) r.close = true;
             else if (id == 2) r.quit = true;
@@ -674,7 +679,7 @@ MenuResult Menu::key(MenuKey k) {
                 sel_ = 0;
             } else if (tab_ == 0 && input_page_ >= 2 &&
                        ((id >= 100 && id <= 106) || (id >= 120 && id <= 122))) {
-                if (!list[sel_].disabled) binding_ = id;
+                if (!list[idx(sel_)].disabled) binding_ = id;
             } else if (tab_ == 0 && input_page_ == 2 && id == 110) {
                 settings_.reset_gamepad();
             } else if (tab_ == 0 && input_page_ == 1 && id == 111) {
@@ -766,7 +771,7 @@ MenuResult Menu::key(MenuKey k) {
         if (tab_ == 0 && input_page_ >= 2) {
             const std::vector<Item> list = items();
             if (sel_ >= 0 && sel_ < (int)list.size())
-                clear_binding(list[sel_].id);
+                clear_binding(list[idx(sel_)].id);
         }
         break;
     case MenuKey::Plus:
@@ -815,7 +820,7 @@ MenuResult Menu::key(MenuKey k) {
     const int m = (int)final_items.size();
     if (m && sel_ >= m) sel_ = m - 1;
     if (m && sel_ < 0) sel_ = 0;
-    if (m && final_items[sel_].kind == Kind::Info) move_selection(+1);
+    if (m && final_items[idx(sel_)].kind == Kind::Info) move_selection(+1);
     if (r.close) close();
     return r;
 }
@@ -828,9 +833,9 @@ void Menu::clear_binding(int id) {
         action = id - 113;
     else
         return;
-    settings_.pad_device[action].clear();
-    settings_.pad_device_name[action].clear();
-    settings_.pad_raw[action] = 0;
+    settings_.pad_device[idx(action)].clear();
+    settings_.pad_device_name[idx(action)].clear();
+    settings_.pad_raw[idx(action)] = 0;
     switch (id) {
     case 100: settings_.pad_steer_left = -1; break;
     case 101: settings_.pad_steer_right = -1; break;
@@ -861,9 +866,9 @@ void Menu::bind_button(int button, const std::string &device, bool raw,
         return;
     }
     const int action = binding_ - 100;
-    settings_.pad_device[action] = device;
-    settings_.pad_device_name[action] = device_name;
-    settings_.pad_raw[action] = raw ? 1 : 0;
+    settings_.pad_device[idx(action)] = device;
+    settings_.pad_device_name[idx(action)] = device_name;
+    settings_.pad_raw[idx(action)] = raw ? 1 : 0;
     switch (binding_) {
     case 100: settings_.pad_steer_left = button; break;
     case 101: settings_.pad_steer_right = button; break;
@@ -886,9 +891,9 @@ void Menu::bind_axis(int axis, int value, const std::string &device, bool raw,
         return;
     }
     const int action = binding_ - 113;
-    settings_.pad_device[action] = device;
-    settings_.pad_device_name[action] = device_name;
-    settings_.pad_raw[action] = raw ? 1 : 0;
+    settings_.pad_device[idx(action)] = device;
+    settings_.pad_device_name[idx(action)] = device_name;
+    settings_.pad_raw[idx(action)] = raw ? 1 : 0;
     switch (binding_) {
     case 120:
         settings_.pad_steer_axis = axis;

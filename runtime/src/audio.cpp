@@ -16,6 +16,7 @@ extern "C" {
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -321,8 +322,11 @@ public:
             clear();
             enabled_ = enabled;
         }
-        feedback_ = 0.70f + 0.28f * (std::clamp(decay_pct, 0, 100) / 100.0f);
-        damp_ = 0.40f * (std::clamp(damping_pct, 0, 100) / 100.0f);
+        feedback_ = 0.70f + 0.28f *
+                                  (static_cast<float>(std::clamp(decay_pct, 0, 100)) /
+                                   100.0f);
+        damp_ = 0.40f *
+                (static_cast<float>(std::clamp(damping_pct, 0, 100)) / 100.0f);
         pre_samples_ = (int)(std::clamp(predelay_ms, 0, 50) * 0.001 * sample_rate_);
         if (pre_samples_ > (int)pre_.size() - 1)
             pre_samples_ = (int)pre_.size() - 1;
@@ -840,7 +844,9 @@ struct Audio::Impl {
                 x.loop = (x.loop & 0xFF00u) | v;
                 if (lane) lane->pcm.loop = x.loop;
             } else if (r == 5) {
-                x.loop = (x.loop & 0x00FFu) | ((uint16_t)v << 8);
+                x.loop = static_cast<uint16_t>(
+                    (x.loop & 0x00FFu) |
+                    static_cast<uint16_t>(static_cast<uint16_t>(v) << 8));
                 if (lane) lane->pcm.loop = x.loop;
             } else if (r == 6) {
                 x.end = v;
@@ -913,11 +919,15 @@ struct Audio::Impl {
                 }
                 if (trace) {
                     uint16_t stack[4] = {};
-                    for (int i = 0; i < 4; ++i)
-                        stack[i] =
-                            (uint16_t)read8((uint16_t)(cpu.sp + i * 2)) |
-                            ((uint16_t)read8((uint16_t)(cpu.sp + i * 2 + 1))
-                             << 8);
+                    for (int i = 0; i < 4; ++i) {
+                        const auto lo_addr = static_cast<uint16_t>(
+                            cpu.sp + static_cast<uint16_t>(i * 2));
+                        const auto hi_addr = static_cast<uint16_t>(lo_addr + 1);
+                        const auto lo = static_cast<uint16_t>(read8(lo_addr));
+                        const auto hi = static_cast<uint16_t>(read8(hi_addr));
+                        stack[i] = static_cast<uint16_t>(
+                            lo | static_cast<uint16_t>(hi << 8));
+                    }
                     std::fprintf(
                         stderr,
                         "[ymkey] cyc=%llu pc=%04X sp=%04X "
@@ -1033,8 +1043,9 @@ struct Audio::Impl {
         }
         // Meter the audible channel contribution: bus and channel trim are
         // already folded into lout/rout.  A muted bus therefore stops the VU.
-        const float raw =
-            std::max(std::abs(x.lout), std::abs(x.rout)) / 16384.0f;
+        const float raw = static_cast<float>(
+                              std::max(std::abs(x.lout), std::abs(x.rout))) /
+                          16384.0f;
         if (group == 1)
             sfx_frame_peak[channel] = std::max(sfx_frame_peak[channel], raw);
         else
@@ -1082,21 +1093,27 @@ struct Audio::Impl {
         while (pos >= kChorusSize) pos -= kChorusSize;
         const int i0 = (int)pos;
         const int i1 = (i0 + 1) % kChorusSize;
-        const float frac = pos - i0;
-        return chorus_buf[ch][i0] * (1.0f - frac) + chorus_buf[ch][i1] * frac;
+        const float frac = pos - static_cast<float>(i0);
+        const auto a = static_cast<std::size_t>(i0);
+        const auto b = static_cast<std::size_t>(i1);
+        return chorus_buf[ch][a] * (1.0f - frac) + chorus_buf[ch][b] * frac;
     }
 
     void chorus_wet(float in_l, float in_r, float &wet_l, float &wet_r) {
         wet_l = wet_r = 0.0f;
         if (chorus_enabled) {
-            const float base = (chorus_delay / 1000.0f) * (float)kOutRate;
-            const float depth = 0.008f * (float)kOutRate * (chorus_depth / 100.0f);
+            const float base =
+                (static_cast<float>(chorus_delay) / 1000.0f) *
+                static_cast<float>(kOutRate);
+            const float depth =
+                0.008f * static_cast<float>(kOutRate) *
+                (static_cast<float>(chorus_depth) / 100.0f);
             const float lfo_l = 0.5f + 0.5f * (float)std::sin(chorus_phase);
             const float lfo_r = 0.5f + 0.5f * (float)std::sin(chorus_phase + 1.57079632679);
             wet_l = chorus_read(0, base + depth * lfo_l);
             wet_r = chorus_read(1, base + depth * lfo_r);
         }
-        const float fb = chorus_feedback / 100.0f;
+        const float fb = static_cast<float>(chorus_feedback) / 100.0f;
         chorus_buf[0][chorus_pos] =
             std::clamp(in_l + wet_l * fb, -32768.0f, 32767.0f);
         chorus_buf[1][chorus_pos] =
@@ -1136,7 +1153,8 @@ struct Audio::Impl {
             rl += cl * ym_reverb_send[ch] / 100;
             rr += cr * ym_reverb_send[ch] / 100;
             const float raw =
-                std::max(std::abs(cl), std::abs(cr)) / 32768.0f;
+                static_cast<float>(std::max(std::abs(cl), std::abs(cr))) /
+                32768.0f;
             ym_frame_peak[ch] = std::max(ym_frame_peak[ch], raw);
         }
         ym_cur_l = std::clamp(l, -32768, 32767);
@@ -1249,18 +1267,22 @@ struct Audio::Impl {
             // individually belong to the music or SFX bus.
             int16_t dry_l = clamp16((pl * 7 + yl * 3) / 10);
             int16_t dry_r = clamp16((pr * 7 + yr * 3) / 10);
-            const float send_l = (psl * 7 + ysl * 3) / 10.0f;
-            const float send_r = (psr * 7 + ysr * 3) / 10.0f;
-            const float rev_send_l = (prl * 7 + yrl * 3) / 10.0f;
-            const float rev_send_r = (prr * 7 + yrr * 3) / 10.0f;
+            const float send_l =
+                static_cast<float>(psl * 7 + ysl * 3) / 10.0f;
+            const float send_r =
+                static_cast<float>(psr * 7 + ysr * 3) / 10.0f;
+            const float rev_send_l =
+                static_cast<float>(prl * 7 + yrl * 3) / 10.0f;
+            const float rev_send_r =
+                static_cast<float>(prr * 7 + yrr * 3) / 10.0f;
             float wet_l = 0.0f, wet_r = 0.0f;
             chorus_wet(send_l, send_r, wet_l, wet_r);
-            const float ret = chorus_mix / 100.0f;
+            const float ret = static_cast<float>(chorus_mix) / 100.0f;
             reverb.set_params(reverb_enabled, reverb_decay, reverb_damping,
                               reverb_predelay);
             float rev_l = 0.0f, rev_r = 0.0f;
             reverb.process(rev_send_l, rev_send_r, rev_l, rev_r);
-            const float rev_ret = reverb_mix / 100.0f;
+            const float rev_ret = static_cast<float>(reverb_mix) / 100.0f;
             const int16_t l = clamp16((int32_t)std::lround(dry_l + wet_l * ret +
                                                           rev_l * rev_ret));
             const int16_t r = clamp16((int32_t)std::lround(dry_r + wet_r * ret +

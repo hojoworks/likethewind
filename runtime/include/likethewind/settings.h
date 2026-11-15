@@ -180,12 +180,13 @@ struct Settings {
     }
 
     uint8_t dip_a() const {
-        return (uint8_t)(((coin_b & 0x0F) << 4) | (coin_a & 0x0F));
+        return static_cast<uint8_t>(((coin_b & 0x0F) << 4) | (coin_a & 0x0F));
     }
     uint8_t dip_b() const {
-        return (uint8_t)(((difficulty & 3) << 6) | ((allow_continue & 1) << 5) |
-                         ((credits & 3) << 3) | ((demo_sounds & 1) << 2) |
-                         (cabinet & 3));
+        return static_cast<uint8_t>(((difficulty & 3) << 6) |
+                                    ((allow_continue & 1) << 5) |
+                                    ((credits & 3) << 3) |
+                                    ((demo_sounds & 1) << 2) | (cabinet & 3));
     }
 
     void clamp();

@@ -9,6 +9,7 @@
 #include "window_input.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -188,7 +189,8 @@ int menutest() {
                 const int r = (x * 255) / Machine::kVisibleWidth;
                 const int g = (y * 255) / Machine::kVisibleLines;
                 const int b = ((x ^ y) & 0x3F) * 3;
-                px[(size_t)y * Machine::kVisibleWidth + x] =
+                px[static_cast<std::size_t>(y) * Machine::kVisibleWidth +
+                   static_cast<std::size_t>(x)] =
                     0xFF000000u | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;
             }
         }

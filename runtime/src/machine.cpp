@@ -93,7 +93,8 @@ void Machine::build_pages() {
     }
     // Main: 512 KB ROM, shared RAM, 64 KB local RAM.
     for (int p = 0; p < 8 && (size_t)(p + 1) * 0x10000 <= rom_main_.size(); p++)
-        cpus[MAIN].rmap[p] = rom_main_.data() + p * 0x10000;
+        cpus[MAIN].rmap[static_cast<size_t>(p)] =
+            rom_main_.data() + p * 0x10000;
     cpus[MAIN].rmap[0x0C] = shared;
     cpus[MAIN].wmap[0x0C] = shared;
     cpus[MAIN].rmap[0x1F] = cpus[MAIN].wmap[0x1F] = main_local;
@@ -101,14 +102,16 @@ void Machine::build_pages() {
     // Sub X: 256 KB ROM, shared RAM, 64 KB sprite RAM. 0x1F is slow (local +
     // backup live in one 64 KB page).
     for (int p = 0; p < 4 && (size_t)(p + 1) * 0x10000 <= rom_subx_.size(); p++)
-        cpus[SUBX].rmap[p] = rom_subx_.data() + p * 0x10000;
+        cpus[SUBX].rmap[static_cast<size_t>(p)] =
+            rom_subx_.data() + p * 0x10000;
     cpus[SUBX].rmap[0x0C] = shared;
     cpus[SUBX].wmap[0x0C] = shared;
     cpus[SUBX].rmap[0x18] = cpus[SUBX].wmap[0x18] = ysprite;
 
     // Sub Y: 256 KB ROM, shared RAM, 64 KB local RAM. 0x18/0x19 are slow.
     for (int p = 0; p < 4 && (size_t)(p + 1) * 0x10000 <= rom_suby_.size(); p++)
-        cpus[SUBY].rmap[p] = rom_suby_.data() + p * 0x10000;
+        cpus[SUBY].rmap[static_cast<size_t>(p)] =
+            rom_suby_.data() + p * 0x10000;
     cpus[SUBY].rmap[0x0C] = shared;
     cpus[SUBY].wmap[0x0C] = shared;
     cpus[SUBY].rmap[0x1F] = cpus[SUBY].wmap[0x1F] = suby_local;
@@ -622,10 +625,13 @@ void Machine::screenshot_ppm(const std::string &path) {
     f << "P6\n" << view_width << " " << kVisibleLines << "\n255\n";
     for (int y = 0; y < kVisibleLines; y++) {
         for (int x = 0; x < view_width; x++) {
-            const uint32_t rgb = palette_rgb(palette[screen[y * kRenderWidth + x] & 0x3FFF]);
-            const uint8_t bytes[3] = {(uint8_t)(rgb >> 16), (uint8_t)(rgb >> 8),
-                                      (uint8_t)rgb};
-            f.write((char *)bytes, 3);
+            const auto index = static_cast<size_t>(y) * kRenderWidth +
+                               static_cast<size_t>(x);
+            const uint32_t rgb = palette_rgb(palette[screen[index] & 0x3FFF]);
+            const uint8_t bytes[3] = {static_cast<uint8_t>(rgb >> 16),
+                                      static_cast<uint8_t>(rgb >> 8),
+                                      static_cast<uint8_t>(rgb)};
+            f.write(reinterpret_cast<const char *>(bytes), 3);
         }
     }
 }
@@ -708,10 +714,10 @@ std::string Machine::fallback_report() const {
             f << "  (none)\n";
         } else {
             for (const auto &p : pcs) {
-                char line[96];
-                std::snprintf(line, sizeof(line), "  $%06X count=%llu\n",
+                char line_buf[96];
+                std::snprintf(line_buf, sizeof(line_buf), "  $%06X count=%llu\n",
                               (unsigned)p.first, (unsigned long long)p.second);
-                f << line;
+                f << line_buf;
             }
         }
     }

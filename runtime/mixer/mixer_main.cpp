@@ -321,7 +321,8 @@ int run_mixer(int argc, char **argv) {
             for (int y = 0; y < 224; ++y) {
                 const uint8_t shade = (uint8_t)(10 + y * 14 / 224);
                 for (int x = 0; x < 320; ++x)
-                    pixels[(size_t)y * 320 + x] =
+                    pixels[static_cast<size_t>(y) * 320 +
+                           static_cast<size_t>(x)] =
                         0xFF000000u | ((uint32_t)(shade + 4) << 16) |
                         ((uint32_t)(shade + 8) << 8) | (uint32_t)(shade + 12);
             }

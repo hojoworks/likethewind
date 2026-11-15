@@ -164,8 +164,8 @@ public:
     static constexpr int kCpuClock = 12500000;
     static constexpr int kFrameRate = 60;
     int64_t cycle_at_line_end(int l) const {
-        return ((int64_t)kCpuClock * ((frame * kLines) + l + 1)) /
-               ((int64_t)kFrameRate * kLines);
+        return (static_cast<int64_t>(kCpuClock) * ((frame * kLines) + l + 1)) /
+               (static_cast<int64_t>(kFrameRate) * kLines);
     }
     static constexpr int kIrq2Line = 170;
     static constexpr int kVblankLine = 223;

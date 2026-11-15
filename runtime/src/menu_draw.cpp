@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -11,6 +12,8 @@
 
 namespace likethewind {
 namespace {
+std::size_t idx(int i) { return static_cast<std::size_t>(i); }
+
 const char *const kTabs[] = {"CONTROLS", "DIP SW", "DISPLAY", "SOUND",
                              "MIXER",    "SYSTEM"};
 struct Glyph {
@@ -176,7 +179,8 @@ void draw_small_text(uint32_t *px, int w, int h, int x, int y,
                             const int X = x + c * scale + dx;
                             const int Y = y + r * scale + dy;
                             if (X >= 0 && X < w && Y >= 0 && Y < h)
-                                px[(size_t)Y * w + X] = color;
+                                px[static_cast<std::size_t>(Y) * static_cast<std::size_t>(w) +
+                                   static_cast<std::size_t>(X)] = color;
                         }
                     }
                 }
@@ -199,7 +203,8 @@ void draw_text(uint32_t *px, int w, int h, int x, int y, const std::string &s,
                             const int X = x + c * scale + dx;
                             const int Y = y + r * scale + dy;
                             if (X >= 0 && X < w && Y >= 0 && Y < h)
-                                px[(size_t)Y * w + X] = color;
+                                px[static_cast<std::size_t>(Y) * static_cast<std::size_t>(w) +
+                                   static_cast<std::size_t>(X)] = color;
                         }
                     }
                 }
@@ -224,7 +229,8 @@ void fill(uint32_t *px, int w, int h, int x, int y, int fw, int fh, uint32_t col
         if (yy < 0 || yy >= h) continue;
         for (int xx = x; xx < x + fw; xx++) {
             if (xx < 0 || xx >= w) continue;
-            uint32_t &p = px[(size_t)yy * w + xx];
+            uint32_t &p = px[static_cast<std::size_t>(yy) * static_cast<std::size_t>(w) +
+                             static_cast<std::size_t>(xx)];
             p = (alpha >= 256) ? color : blend(p, color, alpha);
         }
     }
@@ -428,7 +434,7 @@ void Menu::draw_tour_tracker(
                             std::string(1, (char)('A' + c)), gold);
             x += kLetterWidth + kLetterGap;
             for (int s = 0; s < 5; ++s) {
-                draw_badge(places[c][s], x, badge_y);
+                draw_badge(places[idx(c)][idx(s)], x, badge_y);
                 x += kBadgeStep;
             }
             x += gap;
@@ -448,7 +454,7 @@ void Menu::draw_tour_tracker(
                             std::string(1, (char)('A' + c)), gold);
             x += 6;
             for (int s = 0; s < 5; ++s) {
-                draw_badge(places[c][s], map_x(x), badge_y);
+                draw_badge(places[idx(c)][idx(s)], map_x(x), badge_y);
                 x += (s == 4) ? 6 : 7;
             }
         }
@@ -985,7 +991,7 @@ void Menu::draw(uint32_t *pixels, int width, int height) const {
                     binding_waiting_ ? "RELEASE INPUTS"
                                      : "PRESS A BUTTON OR MOVE AN AXIS";
                 if (!binding_waiting_ && sel >= 0 && sel < (int)list.size())
-                    prompt = "BIND " + list[sel].label +
+                    prompt = "BIND " + list[idx(sel)].label +
                              (binding_axis() ? "  MOVE AXIS"
                                              : "  PRESS BUTTON");
                 draw_small_text(pixels, width, height, px0 + 10, py0 + 44,
@@ -1028,7 +1034,7 @@ void Menu::draw(uint32_t *pixels, int width, int height) const {
         int y = row_y;
         for (int i = 0; i < (int)list.size(); i++) {
             if (y + 6 > row_limit) break;
-            const Item &it = list[i];
+            const Item &it = list[idx(i)];
             const bool active = (i == sel);
             const uint32_t col =
                 (it.kind == Kind::Info || it.disabled)

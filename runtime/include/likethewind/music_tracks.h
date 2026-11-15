@@ -21,7 +21,7 @@ inline constexpr MusicTrack kMusicTracks[] = {
 };
 
 inline constexpr int kMusicTrackCount =
-    (int)(sizeof(kMusicTracks) / sizeof(kMusicTracks[0]));
+    static_cast<int>(sizeof(kMusicTracks) / sizeof(kMusicTracks[0]));
 
 inline const char *music_track_name(uint8_t cmd) {
     for (const MusicTrack &t : kMusicTracks)

@@ -1194,7 +1194,8 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                             (machine.shared[0xEA38] << 8) | machine.shared[0xEA39];
                         if (course >= 0 && course < SpecialTourState::kCourses &&
                             stage >= 0 && stage < SpecialTourState::kStages) {
-                            tour.places[course][stage] =
+                            tour.places[static_cast<std::size_t>(course)]
+                                       [static_cast<std::size_t>(stage)] =
                                 (int8_t)player_place(machine);
                             // Preserve the original game's per-course
                             // special-stage unlock, but let the tour decide
@@ -1205,7 +1206,8 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                             }
                         }
                     } else if (tour.phase == 1 || tour.phase == 2) {
-                        tour.special_places[tour.phase - 1] =
+                        tour.special_places[
+                            static_cast<std::size_t>(tour.phase - 1)] =
                             (int8_t)player_place(machine);
                     }
                 }
@@ -1326,22 +1328,28 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         // not a visible cross-fade.
         blended = (ia >= 16 && ia <= 240);
         for (int y = 0; y < Machine::kVisibleLines; y++) {
+            const auto row = static_cast<std::size_t>(y);
+            const auto blend_alpha = static_cast<uint32_t>(ia);
+            const uint32_t inv_alpha = 256u - blend_alpha;
             for (int x = 0; x < machine.view_width; x++) {
-                const size_t si = (size_t)y * Machine::kRenderWidth + x;
+                const auto column = static_cast<std::size_t>(x);
+                const size_t si = row * Machine::kRenderWidth + column;
                 const uint16_t prev_idx = prev_screen[si];
                 const uint16_t cur_idx = machine.screen[si];
                 uint32_t ca = palette_argb(machine.palette[prev_idx & 0x3FFF]);
                 uint32_t cb = palette_argb(machine.palette[cur_idx & 0x3FFF]);
+                const size_t out_index = row * static_cast<std::size_t>(machine.view_width) +
+                                         column;
                 if (ia >= 256) {
-                    pixels[(size_t)y * machine.view_width + x] = cb;
+                    pixels[out_index] = cb;
                 } else {
-                    uint32_t r = (((ca >> 16) & 0xFF) * (256 - ia) +
-                                  ((cb >> 16) & 0xFF) * ia) >> 8;
-                    uint32_t g = (((ca >> 8) & 0xFF) * (256 - ia) +
-                                  ((cb >> 8) & 0xFF) * ia) >> 8;
-                    uint32_t b = ((ca & 0xFF) * (256 - ia) + (cb & 0xFF) * ia) >> 8;
-                    pixels[(size_t)y * machine.view_width + x] =
-                        0xFF000000u | (r << 16) | (g << 8) | b;
+                    uint32_t r = (((ca >> 16) & 0xFF) * inv_alpha +
+                                  ((cb >> 16) & 0xFF) * blend_alpha) >> 8;
+                    uint32_t g = (((ca >> 8) & 0xFF) * inv_alpha +
+                                  ((cb >> 8) & 0xFF) * blend_alpha) >> 8;
+                    uint32_t b = ((ca & 0xFF) * inv_alpha +
+                                  (cb & 0xFF) * blend_alpha) >> 8;
+                    pixels[out_index] = 0xFF000000u | (r << 16) | (g << 8) | b;
                 }
             }
         }
@@ -1437,12 +1445,15 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             if (SDL_GetRendererOutputSize(ren, &out_w, &out_h) == 0 &&
                 out_w > 0 && out_h > 0) {
                 const float scale =
-                    std::min((float)out_w / machine.view_width,
-                             (float)out_h / Machine::kVisibleLines);
+                    std::min(static_cast<float>(out_w) /
+                                 static_cast<float>(machine.view_width),
+                             static_cast<float>(out_h) /
+                                 static_cast<float>(Machine::kVisibleLines));
                 SDL_Rect game_rect{};
-                game_rect.w = (int)std::floor(machine.view_width * scale);
-                game_rect.h =
-                    (int)std::floor(Machine::kVisibleLines * scale);
+                game_rect.w = static_cast<int>(std::floor(
+                    static_cast<float>(machine.view_width) * scale));
+                game_rect.h = static_cast<int>(std::floor(
+                    static_cast<float>(Machine::kVisibleLines) * scale));
                 game_rect.x = (out_w - game_rect.w) / 2;
                 game_rect.y = (out_h - game_rect.h) / 2;
                 if (game_rect.w > 0 && game_rect.h > 0 &&
