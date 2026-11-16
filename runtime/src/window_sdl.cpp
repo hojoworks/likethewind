@@ -921,10 +921,44 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             if (machine.shared[0xE852] == 0) machine.start_gate_armed = false;
             prevMode = mode;
         }
-        if (settings.aspect != cur_aspect || settings.scale != cur_scale ||
+        const bool aspect_changed = settings.aspect != cur_aspect;
+        const bool window_changed =
+            settings.scale != cur_scale ||
             (settings.fullscreen ? 1 : 0) != cur_fullscreen ||
-            settings.monitor != cur_monitor) {
+            settings.monitor != cur_monitor;
+        if (aspect_changed) {
+            // A different game texture width requires new pixels and a new
+            // streaming texture; the existing window itself is still valid.
             if (!recreate_video()) { running = false; break; }
+            if (menu.visible()) machine.render_frame();
+        } else if (window_changed) {
+            // Avoid destroying the SDL window/renderer for ordinary scale,
+            // fullscreen or monitor changes. Recreating a D3D window while
+            // switching fullscreen modes can terminate the process on
+            // Windows. These operations are supported directly by SDL.
+            if (!win || !ren) { running = false; break; }
+            if ((settings.fullscreen ? 1 : 0) != cur_fullscreen) {
+                const Uint32 fs = settings.fullscreen
+                                      ? SDL_WINDOW_FULLSCREEN_DESKTOP
+                                      : 0;
+                if (SDL_SetWindowFullscreen(win, fs) != 0)
+                    std::fprintf(stderr, "SDL_SetWindowFullscreen: %s\n",
+                                 SDL_GetError());
+            }
+            if (!settings.fullscreen)
+                SDL_SetWindowSize(win,
+                                  machine.view_width * settings.scale,
+                                  Machine::kVisibleLines * settings.scale);
+            if (settings.monitor != cur_monitor) {
+                const int pos =
+                    (int)SDL_WINDOWPOS_CENTERED_DISPLAY(settings.monitor);
+                SDL_SetWindowPosition(win, pos, pos);
+            }
+            SDL_RenderSetLogicalSize(ren, machine.view_width,
+                                     Machine::kVisibleLines);
+            cur_scale = settings.scale;
+            cur_fullscreen = settings.fullscreen ? 1 : 0;
+            cur_monitor = settings.monitor;
             if (menu.visible()) machine.render_frame();
         }
 
