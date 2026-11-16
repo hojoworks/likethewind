@@ -281,6 +281,27 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         return true;
     };
 
+    auto retarget_game_view = [&]() -> bool {
+        if (!ren) return false;
+        machine.widescreen = settings.aspect != 0;
+        machine.view_width = settings.view_width();
+        machine.view_x0 =
+            -(machine.view_width - Machine::kVisibleWidth) / 2;
+        if (tex) { SDL_DestroyTexture(tex); tex = nullptr; }
+        tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888,
+                                SDL_TEXTUREACCESS_STREAMING,
+                                machine.view_width, Machine::kVisibleLines);
+        if (!tex) {
+            std::fprintf(stderr, "SDL_CreateTexture: %s\n", SDL_GetError());
+            return false;
+        }
+        pixels.resize((size_t)machine.view_width * Machine::kVisibleLines);
+        SDL_RenderSetLogicalSize(ren, machine.view_width,
+                                 Machine::kVisibleLines);
+        cur_aspect = settings.aspect;
+        return true;
+    };
+
     if (!recreate_video()) {
         if (ren) SDL_DestroyRenderer(ren);
         if (win) SDL_DestroyWindow(win);
@@ -921,22 +942,12 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             if (machine.shared[0xE852] == 0) machine.start_gate_armed = false;
             prevMode = mode;
         }
-        const bool aspect_changed = settings.aspect != cur_aspect;
-        const bool window_changed =
-            settings.scale != cur_scale ||
-            (settings.fullscreen ? 1 : 0) != cur_fullscreen ||
-            settings.monitor != cur_monitor;
-        if (aspect_changed) {
-            // A different game texture width requires new pixels and a new
-            // streaming texture; the existing window itself is still valid.
-            if (!recreate_video()) { running = false; break; }
-            if (menu.visible()) machine.render_frame();
-        } else if (window_changed) {
+        auto apply_window_changes = [&]() -> bool {
             // Avoid destroying the SDL window/renderer for ordinary scale,
-            // fullscreen or monitor changes. Recreating a D3D window while
-            // switching fullscreen modes can terminate the process on
+            // fullscreen, monitor or aspect changes. Recreating a D3D window
+            // while switching fullscreen modes can terminate the process on
             // Windows. These operations are supported directly by SDL.
-            if (!win || !ren) { running = false; break; }
+            if (!win || !ren) return false;
             if ((settings.fullscreen ? 1 : 0) != cur_fullscreen) {
                 const Uint32 fs = settings.fullscreen
                                       ? SDL_WINDOW_FULLSCREEN_DESKTOP
@@ -959,6 +970,23 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             cur_scale = settings.scale;
             cur_fullscreen = settings.fullscreen ? 1 : 0;
             cur_monitor = settings.monitor;
+            cur_aspect = settings.aspect;
+            return true;
+        };
+
+        const bool aspect_changed = settings.aspect != cur_aspect;
+        const bool window_changed =
+            settings.scale != cur_scale ||
+            (settings.fullscreen ? 1 : 0) != cur_fullscreen ||
+            settings.monitor != cur_monitor;
+        if (aspect_changed) {
+            if (!retarget_game_view() || !apply_window_changes()) {
+                running = false;
+                break;
+            }
+            if (menu.visible()) machine.render_frame();
+        } else if (window_changed) {
+            if (!apply_window_changes()) { running = false; break; }
             if (menu.visible()) machine.render_frame();
         }
 
