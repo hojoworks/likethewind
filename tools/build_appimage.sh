@@ -2,11 +2,11 @@
 # Build the Linux AppImage. Run from the repository root in a Linux environment
 # (WSL is fine):
 #
-#   sh tools/build_appimage.sh 1.4
+#   sh tools/build_appimage.sh 1.5
 #
 set -eu
 
-VERSION=${1:-1.4}
+VERSION=${1:-1.5}
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 
