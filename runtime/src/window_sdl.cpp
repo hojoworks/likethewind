@@ -634,8 +634,13 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                                               machine.player_start_seen);
         const int audio_mode =
             (machine.shared[0xE09C] << 8) | machine.shared[0xE09D];
+        const bool race_active = audio_mode >= 20 && audio_mode <= 21;
         machine.audio()->set_attract_active(audio_mode >= 1 && audio_mode < 7);
-        machine.audio()->set_race_active(audio_mode >= 20 && audio_mode <= 21);
+        machine.audio()->set_race_active(race_active);
+        // The driver starts the engine loop on the attract screen and then
+        // stops it immediately. Keep the lane running but inaudible until the
+        // race so that boot/course-select does not emit a short engine blip.
+        machine.audio()->set_engine_active(race_active);
         apply_mix(machine.audio(), current_mix());
     };
 

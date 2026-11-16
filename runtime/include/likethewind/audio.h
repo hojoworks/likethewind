@@ -26,6 +26,7 @@ public:
     void set_voice_normalizer(bool enabled);
     void set_attract_active(bool active);
     void set_race_active(bool active);
+    void set_engine_active(bool active);
     void set_channel_volumes(const int *ym_percent, const int *pcm_percent);
     void set_sfx_volumes(const int *volumes, const int *sends,
                          const int *reverb_sends);

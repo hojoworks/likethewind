@@ -538,6 +538,8 @@ struct Audio::Impl {
     bool voice_normalizer = false;
     bool attract_active = false;
     bool race_active = false;
+    bool engine_active = true;
+    float engine_mix = 0.0f;
     int ym_volume[8] = {100, 100, 100, 100, 100, 100, 100, 100};
     bool ym_passing_chime[8] = {};
     int pcm_volume[16] = {100, 100, 100, 100, 100, 100, 100, 100,
@@ -978,7 +980,12 @@ struct Audio::Impl {
         const int solo_bit = group == 1 ? 24 + channel : 8 + channel;
         const bool solo_mute =
             solo_mask != 0 && !(solo_mask & (1ull << solo_bit));
-        const int gain = solo_mute ? 0 : bus * volume[channel] / 100;
+        int gain = solo_mute ? 0 : bus * volume[channel] / 100;
+        if (group == 2) {
+            const float target = engine_active ? 1.0f : 0.0f;
+            engine_mix += (target - engine_mix) * 0.0025f;
+            gain = (int)std::lround((float)gain * engine_mix);
+        }
         x.lout = v * (x.lvol & 0x7F) * gain / 100;
         x.rout = v * (x.rvol & 0x7F) * gain / 100;
         if (voice_normalizer && lane && lane->voice_effect && gain > 0) {
@@ -1351,6 +1358,8 @@ void Audio::reset(const std::vector<uint8_t> &z80_rom,
     std::memset(impl_->ym_route_sfx, 0, sizeof(impl_->ym_route_sfx));
     std::memset(impl_->ym_passing_chime, 0, sizeof(impl_->ym_passing_chime));
     impl_->solo_mask = 0;
+    impl_->engine_active = true;
+    impl_->engine_mix = 0.0f;
     std::fill(std::begin(impl_->sfx_lane_volume), std::end(impl_->sfx_lane_volume), 100);
     std::fill(std::begin(impl_->sfx_lane_send), std::end(impl_->sfx_lane_send), 0);
     std::fill(std::begin(impl_->sfx_lane_reverb_send),
@@ -1443,6 +1452,10 @@ void Audio::set_attract_active(bool active) {
 
 void Audio::set_race_active(bool active) {
     impl_->race_active = active;
+}
+
+void Audio::set_engine_active(bool active) {
+    impl_->engine_active = active;
 }
 
 void Audio::set_chorus_sends(const int *ym_percent, const int *pcm_percent) {
