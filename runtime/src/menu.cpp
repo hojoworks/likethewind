@@ -321,11 +321,11 @@ std::vector<Menu::Item> Menu::items() const {
                                Kind::Value, i + 8, stock ? 100 : settings_.pcm_volume[i]});
             out.push_back({"CHORUS", "", Kind::Action, 31});
             out.push_back({"REVERB", "", Kind::Action, 34});
+            out.push_back({"BASS", "", Kind::Action, 37});
             out.push_back({"A/B", settings_.ab_original ? "ORIG" : "MIX",
                            Kind::Action, 33});
             out.push_back({"RESET", "", Kind::Action, 30});
             out.push_back({"SFX", "", Kind::Action, 35});
-            out.push_back({"BASS", "", Kind::Action, 37});
         } else if (mixer_page_ == 3) {
             const bool stock = settings_.audio_preset == 0;
             for (int i = 0; i < Settings::kSfxChannels; ++i)

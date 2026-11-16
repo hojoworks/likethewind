@@ -517,20 +517,20 @@ void Menu::draw_mixer(uint32_t *pixels, int width, int height, int px0, int py0)
         status = tag + "PLATE REVERB";
         status_color = hot;
     } else if (sel_ == 26) {
+        status = tag + "BASS ENHANCER";
+        status_color = hot;
+    } else if (sel_ == 27) {
         if (stock_mode) {
             status = "AUDIO MIX  STOCK";
         } else {
             status = settings_.ab_original ? "A/B  ORIGINAL" : "A/B  MIXED";
         }
         status_color = hot;
-    } else if (sel_ == 27) {
+    } else if (sel_ == 28) {
         status = tag + "RESET ALL CHANNELS AND FX";
         status_color = hot;
-    } else if (sel_ == 28) {
-        status = tag + "SFX CHANNELS";
-        status_color = hot;
     } else if (sel_ == 29) {
-        status = tag + "BASS ENHANCER";
+        status = tag + "SFX CHANNELS";
         status_color = hot;
     }
     draw_small_text(pixels, width, height, px0 + 12, py0 + 44, status, status_color);
@@ -607,13 +607,13 @@ void Menu::draw_mixer(uint32_t *pixels, int width, int height, int px0, int py0)
     draw_button(pixels, width, height, bx, by, btn_w, "CHORUS", sel_ == 24, hot, dim);
     draw_button(pixels, width, height, bx + btn_w + gap, by, btn_w, "REVERB",
                 sel_ == 25, hot, dim);
-    draw_button(pixels, width, height, bx + 2 * (btn_w + gap), by, btn_w, "A/B",
-                sel_ == 26, settings_.ab_original ? 0xFFFF9A50 : hot, dim);
-    draw_button(pixels, width, height, bx + 3 * (btn_w + gap), by, btn_w, "RESET",
-                sel_ == 27, hot, dim);
-    draw_button(pixels, width, height, bx + 4 * (btn_w + gap), by, btn_w, "SFX",
+    draw_button(pixels, width, height, bx + 2 * (btn_w + gap), by, btn_w, "BASS",
+                sel_ == 26, hot, dim);
+    draw_button(pixels, width, height, bx + 3 * (btn_w + gap), by, btn_w, "A/B",
+                sel_ == 27, settings_.ab_original ? 0xFFFF9A50 : hot, dim);
+    draw_button(pixels, width, height, bx + 4 * (btn_w + gap), by, btn_w, "RESET",
                 sel_ == 28, hot, dim);
-    draw_button(pixels, width, height, bx + 5 * (btn_w + gap), by, btn_w, "BASS",
+    draw_button(pixels, width, height, bx + 5 * (btn_w + gap), by, btn_w, "SFX",
                 sel_ == 29, hot, dim);
 }
 
@@ -1060,7 +1060,8 @@ void Menu::draw(uint32_t *pixels, int width, int height) const {
             draw_bass(pixels, width, height, px0, py0);
         else
             draw_mixer(pixels, width, height, px0, py0);
-        draw_stereo_meter(pixels, width, height, px0, py0);
+        if (mixer_mode_)
+            draw_stereo_meter(pixels, width, height, px0, py0);
     } else {
         const bool sound_page = (tab_ == 3 && audio_page_ == 1);
         const bool input_subpage = (tab_ == 0 && input_page_ != 0);

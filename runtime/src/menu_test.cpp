@@ -590,7 +590,6 @@ int menutest() {
     reset_menu.key(MenuKey::TabPrev);   // INPUT -> SYSTEM
     reset_menu.key(MenuKey::TabPrev);   // SYSTEM -> MIXER
     reset_menu.key(MenuKey::Enter);     // unlock mixer
-    reset_menu.key(MenuKey::Left);      // BASS
     reset_menu.key(MenuKey::Left);      // SFX
     reset_menu.key(MenuKey::Left);      // RESET MIXER
     reset_menu.key(MenuKey::Enter);
@@ -680,7 +679,7 @@ int menutest() {
     sfx_solo_menu.key(MenuKey::TabPrev);   // INPUT -> SYSTEM
     sfx_solo_menu.key(MenuKey::TabPrev);   // SYSTEM -> MIXER
     sfx_solo_menu.key(MenuKey::Enter);     // unlock mixer
-    sfx_solo_menu.set_selection(28);       // SFX button
+    sfx_solo_menu.set_selection(29);       // SFX button
     sfx_solo_menu.key(MenuKey::Enter);
     sfx_solo_menu.set_selection(17);       // SFX18
     sfx_solo_menu.key(MenuKey::Solo);
@@ -697,7 +696,7 @@ int menutest() {
     bass_menu.key(MenuKey::TabPrev);   // INPUT -> SYSTEM
     bass_menu.key(MenuKey::TabPrev);   // SYSTEM -> MIXER
     bass_menu.key(MenuKey::Enter);     // unlock mixer
-    bass_menu.set_selection(29);       // BASS button
+    bass_menu.set_selection(26);       // BASS button
     bass_menu.key(MenuKey::Enter);
     bass_menu.set_selection(0);
     bass_menu.key(MenuKey::Enter);     // enable
@@ -736,7 +735,6 @@ int menutest() {
     fx_menu.key(MenuKey::TabPrev);   // INPUT -> SYSTEM
     fx_menu.key(MenuKey::TabPrev);   // SYSTEM -> MIXER
     fx_menu.key(MenuKey::Enter);     // unlock mixer
-    fx_menu.key(MenuKey::Left);      // BASS
     fx_menu.key(MenuKey::Left);      // SFX
     fx_menu.key(MenuKey::Left);      // RESET
     fx_menu.key(MenuKey::Left);      // A/B
@@ -744,6 +742,7 @@ int menutest() {
     const bool ab_on = fx_settings.ab_original;
     fx_menu.key(MenuKey::Enter);
     const bool ab_off = !fx_settings.ab_original;
+    fx_menu.key(MenuKey::Left);      // BASS
     fx_menu.key(MenuKey::Left);      // REVERB
     fx_menu.key(MenuKey::Enter);     // open reverb page
     fx_menu.key(MenuKey::Right);     // reverb on
