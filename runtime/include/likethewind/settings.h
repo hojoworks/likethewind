@@ -68,7 +68,7 @@ struct Settings {
     bool auto_gear = false;     // shift automatically at the speed threshold
     // CRT-style scanlines darken every other rendered row. The intensity is
     // the percentage of black mixed into the dark rows.
-    bool scanlines = true;
+    bool scanlines = false;
     int scanline_intensity = 25; // 0..100
 
     // Audio
@@ -134,8 +134,8 @@ struct Settings {
 
     // Input / game behaviour
     bool push_start = false;    // true: credits wait for the start button
-    int steer_deadzone = 18;
-    int pedal_deadzone = 4;
+    int steer_deadzone = 15;
+    int pedal_deadzone = 5;
     int steer_rate = 8;         // digital steering counts per frame, 1..24
     int pad_steer_rate = 8;     // analog steering slew per frame, 0 = direct
     bool racing_wheel = false;  // direct analog steering, no digital assist
