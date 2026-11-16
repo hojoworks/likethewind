@@ -40,6 +40,9 @@ constexpr float kPlayerPassingPostGainDb = -0.375f;
 constexpr float kPlayerVoicePostGainDb = 1.0f;
 constexpr float kEnemyPassingPostGainDb = 1.0f;
 constexpr float kEnemyVoicePostGainDb = 2.0f;
+// The restored female passing lines are a little hotter than the male ones.
+// This sample-specific trim does not affect the shared player category.
+constexpr float kFemalePassingPostGainDb = -0.5f;
 // The second announcer line after course selection ("Do your best and good
 // luck") sits a little too far forward over the music.
 constexpr float kCourseSelectAnnouncerPostGainDb = -1.5f;
@@ -420,9 +423,13 @@ int pcm_group_for_voice(int voice, uint8_t sample_id) {
     return pcm_sample_group(sample_id);
 }
 
+bool is_passing_sample(uint8_t sample_id) {
+    return g_sample_event[sample_id] == 1 || sample_id == 0x47;
+}
+
 int sfx_category(uint8_t sample_id) {
     if (g_sample_gender[sample_id] == 3) return 1;  // announcer
-    if (g_sample_event[sample_id] == 1 || sample_id == 0x47) return 2;  // passing
+    if (is_passing_sample(sample_id)) return 2;     // passing
     return 0;
 }
 
@@ -539,6 +546,7 @@ struct Audio::Impl {
     bool attract_active = false;
     bool race_active = false;
     bool engine_active = true;
+    bool passing_gate = false;
     float engine_mix = 0.0f;
     int ym_volume[8] = {100, 100, 100, 100, 100, 100, 100, 100};
     bool ym_passing_chime[8] = {};
@@ -655,6 +663,13 @@ struct Audio::Impl {
         // PCM1-14 are the 14 hardware music voices, so every music sample a
         // song uses has a stable channel. Effects overlap in a separate pool;
         // engine keeps two lanes.
+        if (group == 1 && passing_gate && is_passing_sample(sample)) {
+            for (const VirtualVoice &lane : lanes) {
+                if (lane.active && lane.group == 1 &&
+                    is_passing_sample(lane.sample_id))
+                    return;
+            }
+        }
         if (group != 1) {
             const int old = current_lane[group][source];
             if (old >= 0 && lanes[old].active) lanes[old].active = false;
@@ -743,6 +758,7 @@ struct Audio::Impl {
         } else {
             gain_db = kEnemyVoicePostGainDb;
         }
+        if (gender == 2 && passing) gain_db += kFemalePassingPostGainDb;
         if (sample == kCourseSelectAnnouncerSample)
             gain_db += kCourseSelectAnnouncerPostGainDb;
         v.voice_gain = v.voice_effect
@@ -1359,6 +1375,7 @@ void Audio::reset(const std::vector<uint8_t> &z80_rom,
     std::memset(impl_->ym_passing_chime, 0, sizeof(impl_->ym_passing_chime));
     impl_->solo_mask = 0;
     impl_->engine_active = true;
+    impl_->passing_gate = false;
     impl_->engine_mix = 0.0f;
     std::fill(std::begin(impl_->sfx_lane_volume), std::end(impl_->sfx_lane_volume), 100);
     std::fill(std::begin(impl_->sfx_lane_send), std::end(impl_->sfx_lane_send), 0);
@@ -1456,6 +1473,10 @@ void Audio::set_race_active(bool active) {
 
 void Audio::set_engine_active(bool active) {
     impl_->engine_active = active;
+}
+
+void Audio::set_passing_gate(bool enabled) {
+    impl_->passing_gate = enabled;
 }
 
 void Audio::set_chorus_sends(const int *ym_percent, const int *pcm_percent) {

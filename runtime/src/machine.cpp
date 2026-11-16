@@ -311,6 +311,9 @@ void Machine::reset() {
 void Machine::set_voice_restoration(bool female_voices, bool additional_voices) {
     restore_female_voices_ = female_voices;
     restore_additional_voices_ = additional_voices;
+    // The randomized restored passing lines should play one at a time so
+    // rapid passes cannot stack or cut off the previous sample.
+    if (audio_) audio_->set_passing_gate(additional_voices);
 }
 
 void Machine::sound_write(uint8_t value) {
