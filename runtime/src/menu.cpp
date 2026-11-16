@@ -246,7 +246,10 @@ std::vector<Menu::Item> Menu::items() const {
                                : (settings_.frame_rate == 144 ? "144 FPS INTERP"
                                                               : "120 FPS INTERP");
         out.push_back({"ASPECT RATIO", kAspect[settings_.aspect], Kind::Value, 0});
-        out.push_back({"SCALE", fmt("%dx", settings_.scale), Kind::Value, 1});
+        const Kind scale_kind =
+            settings_.fullscreen ? Kind::Info : Kind::Value;
+        out.push_back({"WINDOW SCALE", fmt("%dx", settings_.scale),
+                       scale_kind, 1});
         out.push_back({"FRAME RATE", rate, Kind::Value, 2});
         out.push_back({"SHOW FPS", kOnOff[settings_.show_fps ? 1 : 0], Kind::Value, 3});
         out.push_back({"GEAR INDICATOR", kOnOff[settings_.show_gear ? 1 : 0], Kind::Value, 4});

@@ -144,6 +144,20 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
     int scan_tex_intensity = -1;
     Menu menu(settings);
 
+    auto show_video_error = [&](const char *message) {
+        const char *error = SDL_GetError();
+        std::fprintf(stderr, "[video] %s%s%s\n", message,
+                     error && *error ? ": " : "",
+                     error && *error ? error : "");
+        std::string text = message;
+        if (error && *error) {
+            text += "\n\n";
+            text += error;
+        }
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "LikeTheWind",
+                                 text.c_str(), win);
+    };
+
     auto destroy_scanline_texture = [&]() {
         if (scan_tex) { SDL_DestroyTexture(scan_tex); scan_tex = nullptr; }
         scan_tex_h = 0;
@@ -303,6 +317,7 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
     };
 
     if (!recreate_video()) {
+        show_video_error("Could not create the game window");
         if (ren) SDL_DestroyRenderer(ren);
         if (win) SDL_DestroyWindow(win);
         SDL_Quit();
@@ -948,7 +963,7 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             // while switching fullscreen modes can terminate the process on
             // Windows. These operations are supported directly by SDL.
             if (!win || !ren) return false;
-            const bool want_fullscreen = settings.fullscreen;
+            bool want_fullscreen = settings.fullscreen;
             const bool monitor_changed = settings.monitor != cur_monitor;
 
             if (monitor_changed) {
@@ -958,11 +973,19 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                 // Leave fullscreen, centre on the requested display, then
                 // re-enter fullscreen if it is still wanted.
                 if (cur_fullscreen) {
-                    SDL_SetWindowFullscreen(win, 0);
+                    if (SDL_SetWindowFullscreen(win, 0) != 0)
+                        std::fprintf(stderr,
+                                     "SDL_SetWindowFullscreen(off): %s\n",
+                                     SDL_GetError());
                     SDL_SetWindowPosition(win, pos, pos);
-                    if (want_fullscreen)
+                    if (want_fullscreen &&
                         SDL_SetWindowFullscreen(
-                            win, SDL_WINDOW_FULLSCREEN_DESKTOP);
+                            win, SDL_WINDOW_FULLSCREEN_DESKTOP) != 0) {
+                        show_video_error(
+                            "Could not move the fullscreen window");
+                        settings.fullscreen = false;
+                        want_fullscreen = false;
+                    }
                 } else {
                     SDL_SetWindowPosition(win, pos, pos);
                 }
@@ -975,22 +998,30 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                 const Uint32 fs = want_fullscreen
                                       ? SDL_WINDOW_FULLSCREEN_DESKTOP
                                       : 0;
-                if (SDL_SetWindowFullscreen(win, fs) != 0)
-                    std::fprintf(stderr, "SDL_SetWindowFullscreen: %s\n",
-                                 SDL_GetError());
+                if (SDL_SetWindowFullscreen(win, fs) != 0) {
+                    show_video_error("Could not change fullscreen mode");
+                    settings.fullscreen = cur_fullscreen != 0;
+                    want_fullscreen = settings.fullscreen;
+                }
             }
             if (!want_fullscreen)
                 SDL_SetWindowSize(win,
                                   machine.view_width * settings.scale,
                                   Machine::kVisibleLines * settings.scale);
-            SDL_RenderSetLogicalSize(ren, machine.view_width,
-                                     Machine::kVisibleLines);
+            if (SDL_RenderSetLogicalSize(ren, machine.view_width,
+                                         Machine::kVisibleLines) != 0)
+                std::fprintf(stderr, "SDL_RenderSetLogicalSize: %s\n",
+                             SDL_GetError());
             cur_scale = settings.scale;
             cur_fullscreen = want_fullscreen ? 1 : 0;
             cur_monitor = settings.monitor;
             cur_aspect = settings.aspect;
 
             const int di = SDL_GetWindowDisplayIndex(win);
+            if (monitor_changed && di != settings.monitor)
+                std::fprintf(stderr,
+                             "[video] requested monitor %d, SDL selected %d\n",
+                             settings.monitor, di);
             SDL_DisplayMode dm{};
             display_hz =
                 (di >= 0 && SDL_GetDesktopDisplayMode(di, &dm) == 0 &&
@@ -1010,13 +1041,23 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             (settings.fullscreen ? 1 : 0) != cur_fullscreen ||
             settings.monitor != cur_monitor;
         if (aspect_changed) {
-            if (!retarget_game_view() || !apply_window_changes()) {
+            if (!retarget_game_view()) {
+                show_video_error("Could not change the aspect ratio");
+                running = false;
+                break;
+            }
+            if (!apply_window_changes()) {
+                show_video_error("Could not apply the window changes");
                 running = false;
                 break;
             }
             if (menu.visible()) machine.render_frame();
         } else if (window_changed) {
-            if (!apply_window_changes()) { running = false; break; }
+            if (!apply_window_changes()) {
+                show_video_error("Could not apply the window changes");
+                running = false;
+                break;
+            }
             if (menu.visible()) machine.render_frame();
         }
 
