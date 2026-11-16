@@ -388,6 +388,7 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
     const bool tour_debug = std::getenv("LIKETHEWIND_TOUR_DEBUG") != nullptr;
     int last_tour_log_mode = -1;
     bool last_tour_log_started = false;
+    bool last_tour_hud = false;
     if (tour_debug) {
         std::error_code cwd_error;
         const std::string cwd =
@@ -1447,8 +1448,21 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
         const bool tour_hud_ready =
             settings.special_tour &&
             (tour.started ? tour.tracker_ready : mode_now == 8);
-        if (!menu_up && tour_hud_ready &&
-            ((mode_now >= 8 && mode_now <= 25) || tour.results_hold)) {
+        // Once the tour starts, keep the tracker visible through every
+        // transition/results mode until the tour state is reset.
+        const bool tour_hud_draw = !menu_up && tour_hud_ready;
+        if (tour_debug && tour_hud_draw != last_tour_hud) {
+            std::fprintf(stderr,
+                         "[tourhud] frame=%lld mode=%d menu=%d started=%d "
+                         "ready=%d results=%d draw=%d\n",
+                         (long long)machine.frame, mode_now,
+                         menu_up ? 1 : 0, tour.started ? 1 : 0,
+                         tour.tracker_ready ? 1 : 0,
+                         tour.results_hold ? 1 : 0,
+                         tour_hud_draw ? 1 : 0);
+            last_tour_hud = tour_hud_draw;
+        }
+        if (tour_hud_draw) {
             uint64_t current_hundredths = 0;
             uint64_t total_hundredths = tour.total_hundredths;
             if (tour.race_start_frame >= 0) {
