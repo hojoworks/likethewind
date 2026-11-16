@@ -1167,10 +1167,10 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
                 }
 
                 // The first course choice happens on the normal course-select
-                // screen. Once the player starts it and enters the garage,
-                // capture that course as the tour origin.
-                if (mode_after >= 9 && !tour.started &&
-                    machine.player_start_seen) {
+                // screen. Entering the garage/race is enough to know the game
+                // has started; do not depend on player_start_seen, because
+                // credit/auto starts can reach mode 9 without setting it.
+                if (mode_after >= 9 && mode_after <= 20 && !tour.started) {
                     const int selected_course =
                         (machine.shared[0xEA2A] << 8) | machine.shared[0xEA2B];
                     tour.start_course = std::clamp(selected_course, 0, 4);
