@@ -948,29 +948,59 @@ bool run_window(Machine &machine, Settings &settings, int max_frames, bool save_
             // while switching fullscreen modes can terminate the process on
             // Windows. These operations are supported directly by SDL.
             if (!win || !ren) return false;
-            if ((settings.fullscreen ? 1 : 0) != cur_fullscreen) {
-                const Uint32 fs = settings.fullscreen
+            const bool want_fullscreen = settings.fullscreen;
+            const bool monitor_changed = settings.monitor != cur_monitor;
+
+            if (monitor_changed) {
+                const int pos =
+                    (int)SDL_WINDOWPOS_CENTERED_DISPLAY(settings.monitor);
+                // A fullscreen window ignores SetWindowPosition on Windows.
+                // Leave fullscreen, centre on the requested display, then
+                // re-enter fullscreen if it is still wanted.
+                if (cur_fullscreen) {
+                    SDL_SetWindowFullscreen(win, 0);
+                    SDL_SetWindowPosition(win, pos, pos);
+                    if (want_fullscreen)
+                        SDL_SetWindowFullscreen(
+                            win, SDL_WINDOW_FULLSCREEN_DESKTOP);
+                } else {
+                    SDL_SetWindowPosition(win, pos, pos);
+                }
+            }
+
+            const bool fullscreen_changed =
+                (want_fullscreen ? 1 : 0) != cur_fullscreen &&
+                !(monitor_changed && cur_fullscreen);
+            if (fullscreen_changed) {
+                const Uint32 fs = want_fullscreen
                                       ? SDL_WINDOW_FULLSCREEN_DESKTOP
                                       : 0;
                 if (SDL_SetWindowFullscreen(win, fs) != 0)
                     std::fprintf(stderr, "SDL_SetWindowFullscreen: %s\n",
                                  SDL_GetError());
             }
-            if (!settings.fullscreen)
+            if (!want_fullscreen)
                 SDL_SetWindowSize(win,
                                   machine.view_width * settings.scale,
                                   Machine::kVisibleLines * settings.scale);
-            if (settings.monitor != cur_monitor) {
-                const int pos =
-                    (int)SDL_WINDOWPOS_CENTERED_DISPLAY(settings.monitor);
-                SDL_SetWindowPosition(win, pos, pos);
-            }
             SDL_RenderSetLogicalSize(ren, machine.view_width,
                                      Machine::kVisibleLines);
             cur_scale = settings.scale;
-            cur_fullscreen = settings.fullscreen ? 1 : 0;
+            cur_fullscreen = want_fullscreen ? 1 : 0;
             cur_monitor = settings.monitor;
             cur_aspect = settings.aspect;
+
+            const int di = SDL_GetWindowDisplayIndex(win);
+            SDL_DisplayMode dm{};
+            display_hz =
+                (di >= 0 && SDL_GetDesktopDisplayMode(di, &dm) == 0 &&
+                 dm.refresh_rate > 0)
+                    ? dm.refresh_rate
+                    : 60;
+            menu.set_display_hz(display_hz);
+            menu.set_present_stats(0.0, 0);
+            std::fprintf(stderr, "[video] monitor %d (%d Hz)\n",
+                         di >= 0 ? di : settings.monitor, display_hz);
             return true;
         };
 
