@@ -328,7 +328,7 @@ if ($Package) {
     Copy-Item (Join-Path $Root 'vendor\z80\LICENSE') (Join-Path $Licenses 'z80.txt') -Force
     Copy-Item (Join-Path $SdlRoot 'LICENSE.txt') (Join-Path $Licenses 'SDL2.txt') -Force -ErrorAction SilentlyContinue
     $ReleaseReadme = @"
-LikeTheWind 1.5 - Power Drift
+LikeTheWind 1.6 - Power Drift
 =============================
 
 Windows:
@@ -336,7 +336,7 @@ Windows:
     Run LikeTheWind.exe.
 
 Linux x86_64:
-    Download LikeTheWind-1.5-linux-x86_64.tar.gz from the release page,
+    Download LikeTheWind-1.6-linux-x86_64.tar.gz from the release page,
     extract it, and put pdrift.zip in the roms folder:
         chmod +x LikeTheWind.AppImage
         ./LikeTheWind.AppImage

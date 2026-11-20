@@ -1,11 +1,11 @@
 #!/bin/sh
 # Package the AppImage with a ready-to-use Linux directory structure.
 #
-#   sh tools/package_linux_tar.sh 1.5
+#   sh tools/package_linux_tar.sh 1.6
 #
 set -eu
 
-VERSION=${1:-1.5}
+VERSION=${1:-1.6}
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 

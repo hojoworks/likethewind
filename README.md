@@ -4,7 +4,7 @@
 
 # LikeTheWind
 
-**Version 1.5**
+**Version 1.6**
 
 [**Download the latest version here**](https://github.com/hojoworks/likethewind/releases/latest)
 
@@ -61,12 +61,12 @@ You need:
 
 ### Linux AppImage (recommended)
 
-1. Download **`LikeTheWind-1.5-linux-x86_64.tar.gz`** and extract it.
+1. Download **`LikeTheWind-1.6-linux-x86_64.tar.gz`** and extract it.
 2. Put **`pdrift.zip`** in the extracted **`roms`** folder.
 3. Make the AppImage executable and run it:
 
 ```bash
-cd LikeTheWind-1.5-linux-x86_64
+cd LikeTheWind-1.6-linux-x86_64
 chmod +x LikeTheWind.AppImage
 ./LikeTheWind.AppImage
 ```
